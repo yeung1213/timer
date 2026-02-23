@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Runner - Boston Finish Line Timer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #2b6cc4;
+            font-family: sans-serif;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            pointer-events: none;
+            z-index: 10;
+        }
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            z-index: 20;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: none; /* Hidden until loaded */
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        .input-group div {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        input {
+            width: 50px;
+            padding: 5px;
+            text-align: center;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #fbd015;
+            color: #0a1945;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background-color: #e5bd13;
+        }
+        button:disabled {
+            background-color: #888;
+            cursor: not-allowed;
+        }
+        #timer-display {
+            font-size: 48px;
+            font-weight: bold;
+            font-family: monospace;
+            margin-top: 10px;
+            color: #fbd015;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div id="loading">Generating Cityscape, Finish Line & Audience...</div>
+    
+    <div id="ui-panel">
+        <div class="input-group" id="input-controls">
+            <div>
+                <input type="number" id="hours" min="0" value="0">
+                <label>Hours</label>
+            </div>
+            <div>
+                <input type="number" id="minutes" min="0" max="59" value="0">
+                <label>Minutes</label>
+            </div>
+            <div>
+                <input type="number" id="seconds" min="0" max="59" value="10">
+                <label>Seconds</label>
+            </div>
+        </div>
+        <button id="start-btn">Start Run</button>
+        <div id="timer-display">00:00:00</div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // --- Web Audio API Setup (Synthesized Victory Sound) ---
+        let audioCtx;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playVictorySound() {
+            if (!audioCtx) return;
+
+            const playNote = (freq, startTime, duration, type = 'square') => {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                osc.type = type; // 'square' or 'sawtooth' gives a brassy/horn-like sound
+                osc.frequency.value = freq;
+                
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                // Envelope to make it sound more natural
+                gainNode.gain.setValueAtTime(0, startTime);
+                gainNode.gain.linearRampToValueAtTime(0.15, startTime + 0.05);
+                gainNode.gain.setValueAtTime(0.15, startTime + duration - 0.1);
+                gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+                
+                osc.start(startTime);
+                osc.stop(startTime + duration);
+            };
+
+            const now = audioCtx.currentTime;
+            
+            // Play a triumphant fanfare: C4, E4, G4, C5 (Ta-Da-Da-DAAA)
+            playNote(261.63, now, 0.15);       // C4
+            playNote(329.63, now + 0.15, 0.15); // E4
+            playNote(392.00, now + 0.30, 0.15); // G4
+            
+            // Final chord (C major)
+            playNote(523.25, now + 0.45, 1.0); // C5
+            playNote(329.63, now + 0.45, 1.0); // E4
+            playNote(392.00, now + 0.45, 1.0); // G4
+        }
+
+        // --- Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x2b6cc4); 
+        scene.fog = new THREE.Fog(0x2b6cc4, 50, 200);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('ui-panel').style.display = 'block';
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight.position.set(-30, 50, 20);
+        dirLight.castShadow = true;
+        dirLight.shadow.camera.top = 80;
+        dirLight.shadow.camera.bottom = -80;
+        dirLight.shadow.camera.left = -80;
+        dirLight.shadow.camera.right = 80;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        // --- Procedural Textures (Canvas) ---
+        function createClassicalStoneTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#e3dfd5';
+            ctx.fillRect(0, 0, 512, 1024);
+
+            ctx.lineWidth = 2;
+            for(let i = 0; i < 1024; i += 16) {
+                ctx.fillStyle = '#c7c3b9';
+                ctx.fillRect(0, i, 512, 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, i+2, 512, 1);
+            }
+
+            const cols = 5;
+            const rows = 12;
+            const winW = 50;
+            const winH = 65;
+            const spacingX = (512 - (cols * winW)) / (cols + 1);
+            const spacingY = (1024 - 150 - (rows * winH)) / rows; 
+
+            for(let r = 0; r < rows; r++) {
+                for(let c = 0; c < cols; c++) {
+                    const x = spacingX + c * (winW + spacingX);
+                    const y = 1024 - 150 - r * (winH + spacingY) - winH; 
+                    
+                    ctx.fillStyle = '#a39f95';
+                    ctx.fillRect(x - 4, y - 4, winW + 8, winH + 8);
+                    
+                    ctx.fillStyle = '#1c2836';
+                    ctx.fillRect(x, y, winW, winH);
+                    
+                    ctx.fillStyle = '#3a4a5a';
+                    ctx.fillRect(x + winW/2 - 2, y, 4, winH);
+                    ctx.fillRect(x, y + winH/2 - 2, winW, 4);
+                }
+            }
+
+            ctx.fillStyle = '#d1cdbc';
+            ctx.fillRect(0, 1024 - 120, 512, 120);
+            
+            for(let c = 0; c < cols; c++) {
+                const x = spacingX + c * (winW + spacingX);
+                const y = 1024 - 100;
+                
+                ctx.fillStyle = '#111820';
+                ctx.fillRect(x - 10, y, winW + 20, 100);
+                
+                ctx.fillStyle = '#8a867d';
+                ctx.fillRect(x - 10, y, winW + 20, 5);
+                ctx.fillRect(x - 10, y, 5, 100);
+                ctx.fillRect(x + winW + 5, y, 5, 100);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function createFinishLineTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#2b3b8c';
+            ctx.fillRect(0, 0, 1024, 512);
+
+            ctx.fillStyle = '#fbd015';
+            ctx.font = 'bold 180px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.scale(1, 0.8);
+            ctx.fillText('FINISH', 512, 420);
+            ctx.scale(1, 1.25); 
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 45px sans-serif';
+            ctx.letterSpacing = '10px';
+            ctx.fillText('2025 CITY MARATHON', 512, 150);
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(50, 220);
+            ctx.lineTo(974, 220);
+            ctx.stroke();
+
+            function drawStar(cx, cy, spikes, outerRadius, innerRadius) {
+                let rot = Math.PI / 2 * 3;
+                let x = cx;
+                let y = cy;
+                let step = Math.PI / spikes;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy - outerRadius);
+                for (let i = 0; i < spikes; i++) {
+                    x = cx + Math.cos(rot) * outerRadius;
+                    y = cy + Math.sin(rot) * outerRadius;
+                    ctx.lineTo(x, y);
+                    rot += step;
+                    x = cx + Math.cos(rot) * innerRadius;
+                    y = cy + Math.sin(rot) * innerRadius;
+                    ctx.lineTo(x, y);
+                    rot += step;
+                }
+                ctx.lineTo(cx, cy - outerRadius);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            ctx.fillStyle = '#ffffff';
+            for(let i = 1; i <= 7; i++) {
+                drawStar(i * 128, 220, 5, 15, 7);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            return tex;
+        }
+
+        function createTapeTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = '#0a1945';
+            ctx.fillRect(0, 0, 1024, 128);
+            
+            ctx.fillStyle = '#fbd015';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('CITY MARATHON', 512, 64);
+            
+            const tex = new THREE.CanvasTexture(canvas);
+            return tex;
+        }
+
+        const texStone = createClassicalStoneTexture();
+        const texFinishLine = createFinishLineTexture();
+        const texTape = createTapeTexture();
+
+        // --- Materials ---
+        const matSidewalk = new THREE.MeshPhongMaterial({ color: 0xcccccc, flatShading: true });
+        const matRoad = new THREE.MeshPhongMaterial({ color: 0x444444, flatShading: true });
+        const matRail = new THREE.MeshStandardMaterial({ color: 0x999999, metalness: 0.8, roughness: 0.2 });
+        const matCornice = new THREE.MeshPhongMaterial({ color: 0xd1cdbc });
+        const matRoofTrim = new THREE.MeshPhongMaterial({ color: 0x4a7c59 });
+        const matPole = new THREE.MeshPhongMaterial({ color: 0x222222 });
+        const matLeaves = new THREE.MeshPhongMaterial({ color: 0x2d5a27, flatShading: true });
+        const matTrunk = new THREE.MeshPhongMaterial({ color: 0x4a3b2c });
+
+        const matSkin = new THREE.MeshPhongMaterial({ color: 0xffccaa, flatShading: true });
+        const matShirt = new THREE.MeshPhongMaterial({ color: 0x228833, flatShading: true }); 
+        const matPants = new THREE.MeshPhongMaterial({ color: 0x111111, flatShading: true });
+
+        const audienceColors = [0xd32f2f, 0x1976d2, 0x388e3c, 0xfbc02d, 0x7b1fa2, 0x0097a7, 0xe64a19, 0xffeb3b, 0xffffff, 0x000000];
+        const audienceMats = audienceColors.map(c => new THREE.MeshPhongMaterial({ color: c, flatShading: true }));
+
+        // --- Environment ---
+        const groundGeo = new THREE.PlaneGeometry(300, 300);
+        const ground = new THREE.Mesh(groundGeo, matSidewalk);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const roadGeo = new THREE.PlaneGeometry(24, 300);
+        const road = new THREE.Mesh(roadGeo, matRoad);
+        road.rotation.x = -Math.PI / 2;
+        road.position.y = 0.05;
+        road.receiveShadow = true;
+        scene.add(road);
+
+        const trackOffsets = [-3, -1.5, 1.5, 3];
+        trackOffsets.forEach(offset => {
+            const railGeo = new THREE.PlaneGeometry(0.2, 300);
+            const rail = new THREE.Mesh(railGeo, matRail);
+            rail.rotation.x = -Math.PI / 2;
+            rail.position.set(offset, 0.06, 0);
+            scene.add(rail);
+        });
+
+        // --- Finish Line Elements ---
+        const finishLineZ = 40;
+        const startLineZ = -60;
+        const totalDistance = finishLineZ - startLineZ;
+
+        const flGeo = new THREE.PlaneGeometry(24, 12);
+        const flMat = new THREE.MeshPhongMaterial({ map: texFinishLine });
+        const finishLineGround = new THREE.Mesh(flGeo, flMat);
+        finishLineGround.rotation.x = -Math.PI / 2;
+        finishLineGround.position.set(0, 0.07, finishLineZ);
+        finishLineGround.receiveShadow = true;
+        scene.add(finishLineGround);
+
+        const tapeGeo = new THREE.PlaneGeometry(24, 1.2);
+        const tapeMat = new THREE.MeshBasicMaterial({ map: texTape, side: THREE.DoubleSide, transparent: true });
+        const finishTape = new THREE.Mesh(tapeGeo, tapeMat);
+        finishTape.position.set(0, 1.8, finishLineZ);
+        scene.add(finishTape);
+
+        const clockGroup = new THREE.Group();
+        const clockStandGeo = new THREE.BoxGeometry(1, 4, 1);
+        const clockStand = new THREE.Mesh(clockStandGeo, new THREE.MeshPhongMaterial({color: 0x111111}));
+        clockStand.position.y = 2;
+        clockGroup.add(clockStand);
+
+        const clockBoxGeo = new THREE.BoxGeometry(5, 2, 1.5);
+        const clockBox = new THREE.Mesh(clockBoxGeo, new THREE.MeshPhongMaterial({color: 0x0a1945}));
+        clockBox.position.y = 4.5;
+        clockGroup.add(clockBox);
+
+        const screenGeo = new THREE.PlaneGeometry(4.5, 1.5);
+        const screenMat = new THREE.MeshBasicMaterial({color: 0x000000});
+        const screen = new THREE.Mesh(screenGeo, screenMat);
+        screen.position.set(0, 4.5, 0.76);
+        clockGroup.add(screen);
+
+        clockGroup.position.set(10, 0, finishLineZ);
+        clockGroup.rotation.y = -0.2;
+        scene.add(clockGroup);
+
+        function createTree(x, z) {
+            const tree = new THREE.Group();
+            const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 3, 5);
+            const trunk = new THREE.Mesh(trunkGeo, matTrunk);
+            trunk.position.y = 1.5;
+            trunk.castShadow = true;
+            tree.add(trunk);
+
+            const leavesGeo = new THREE.DodecahedronGeometry(2.5, 1);
+            const leaves = new THREE.Mesh(leavesGeo, matLeaves);
+            leaves.position.y = 4.5;
+            leaves.castShadow = true;
+            tree.add(leaves);
+
+            tree.position.set(x, 0, z);
+            scene.add(tree);
+        }
+
+        function createPole(x, z) {
+            const poleGeo = new THREE.CylinderGeometry(0.15, 0.2, 12, 8);
+            const pole = new THREE.Mesh(poleGeo, matPole);
+            pole.position.set(x, 6, z);
+            pole.castShadow = true;
+            scene.add(pole);
+        }
+
+        function createClassicalBuilding(x, z, width, height, depth, isCurved) {
+            const bldgGroup = new THREE.Group();
+            
+            const bldgTexture = texStone.clone();
+            bldgTexture.needsUpdate = true;
+            bldgTexture.repeat.set(width / 15, height / 25);
+
+            const matFacade = new THREE.MeshPhongMaterial({ map: bldgTexture });
+            const matRoof = new THREE.MeshPhongMaterial({ color: 0x888888 });
+
+            let mesh;
+            if (isCurved) {
+                const curveGeo = new THREE.CylinderGeometry(width, width, height, 16, 1, false, 0, Math.PI);
+                mesh = new THREE.Mesh(curveGeo, [matFacade, matFacade, matRoof]);
+                mesh.rotation.y = x > 0 ? -Math.PI/2 : Math.PI/2;
+            } else {
+                const geo = new THREE.BoxGeometry(width, height, depth);
+                mesh = new THREE.Mesh(geo, [matFacade, matFacade, matRoof, matRoof, matFacade, matFacade]);
+            }
+            mesh.position.y = height / 2;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            bldgGroup.add(mesh);
+
+            const corniceGeo = isCurved 
+                ? new THREE.CylinderGeometry(width + 1, width + 0.5, 1.5, 16, 1, false, 0, Math.PI)
+                : new THREE.BoxGeometry(width + 2, 1.5, depth + 2);
+            
+            const cornice = new THREE.Mesh(corniceGeo, matCornice);
+            cornice.position.y = height;
+            if (isCurved) cornice.rotation.y = x > 0 ? -Math.PI/2 : Math.PI/2;
+            cornice.castShadow = true;
+            bldgGroup.add(cornice);
+
+            const trimGeo = isCurved
+                ? new THREE.CylinderGeometry(width + 0.8, width + 1, 0.8, 16, 1, false, 0, Math.PI)
+                : new THREE.BoxGeometry(width + 1.6, 0.8, depth + 1.6);
+            const trim = new THREE.Mesh(trimGeo, matRoofTrim);
+            trim.position.y = height + 1;
+            if (isCurved) trim.rotation.y = x > 0 ? -Math.PI/2 : Math.PI/2;
+            bldgGroup.add(trim);
+
+            bldgGroup.position.set(x, 0, z);
+            scene.add(bldgGroup);
+        }
+
+        for(let z = -120; z < 120; z += 35) {
+            createClassicalBuilding(-25, z, 20, 50 + Math.random() * 20, 25, false);
+            const isCurved = (z % 70 === 0);
+            createClassicalBuilding(25, z, 20, 60 + Math.random() * 20, 25, isCurved);
+
+            if (z % 20 === 0) {
+                createTree(-14, z + 5);
+                createTree(14, z - 5);
+                createPole(-13, z);
+                createPole(13, z + 10);
+            }
+        }
+
+        // --- Audience / Spectators ---
+        const spectators = [];
+        
+        function createSpectator(x, z, isLeftSide) {
+            const specGroup = new THREE.Group();
+            
+            const matSpecShirt = audienceMats[Math.floor(Math.random() * audienceMats.length)];
+            
+            const bodyGeo = new THREE.BoxGeometry(0.5, 0.9, 0.3);
+            const body = new THREE.Mesh(bodyGeo, matSpecShirt);
+            body.position.y = 0.95;
+            body.castShadow = true;
+            specGroup.add(body);
+
+            const headGeo = new THREE.BoxGeometry(0.35, 0.35, 0.35);
+            const head = new THREE.Mesh(headGeo, matSkin);
+            head.position.y = 1.6;
+            head.castShadow = true;
+            specGroup.add(head);
+
+            function createArm(armX) {
+                const pivot = new THREE.Group();
+                pivot.position.set(armX, 1.3, 0); 
+                const armGeo = new THREE.BoxGeometry(0.15, 0.5, 0.15);
+                const arm = new THREE.Mesh(armGeo, matSkin);
+                arm.position.y = -0.25; 
+                arm.castShadow = true;
+                pivot.add(arm);
+                return pivot;
+            }
+
+            const armL = createArm(-0.35);
+            const armR = createArm(0.35);
+            specGroup.add(armL);
+            specGroup.add(armR);
+
+            specGroup.rotation.y = isLeftSide ? Math.PI / 2 : -Math.PI / 2;
+            specGroup.rotation.y += (Math.random() - 0.5) * 0.5;
+
+            specGroup.position.set(x, 0, z);
+            scene.add(specGroup);
+
+            spectators.push({
+                group: specGroup,
+                armL: armL,
+                armR: armR,
+                phase: Math.random() * Math.PI * 2,
+                speed: 10 + Math.random() * 8
+            });
+        }
+
+        for (let z = -100; z < 80; z += 1.5 + Math.random() * 2) {
+            if (Math.random() > 0.2) createSpectator(-4.5 - Math.random() * 1.5, z, true);
+            if (Math.random() > 0.4) createSpectator(-6.5 - Math.random() * 2.0, z + Math.random(), true);
+            
+            if (Math.random() > 0.2) createSpectator(4.5 + Math.random() * 1.5, z, false);
+            if (Math.random() > 0.4) createSpectator(6.5 + Math.random() * 2.0, z + Math.random(), false);
+        }
+
+        // --- Runner ---
+        const runner = new THREE.Group();
+        const runnerBody = new THREE.Group(); 
+        runner.add(runnerBody);
+        
+        const torsoGeo = new THREE.BoxGeometry(0.8, 1.2, 0.4);
+        const torso = new THREE.Mesh(torsoGeo, matShirt);
+        torso.position.y = 1.6;
+        torso.castShadow = true;
+        runnerBody.add(torso);
+
+        const headGroup = new THREE.Group();
+        headGroup.position.y = 2.5;
+        runnerBody.add(headGroup);
+
+        const headRunnerGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const headRunner = new THREE.Mesh(headRunnerGeo, matSkin);
+        headRunner.castShadow = true;
+        headGroup.add(headRunner);
+
+        function createJointedLimb(width, upperLength, lowerLength, matUpper, matLower, x, y, z) {
+            const root = new THREE.Group();
+            root.position.set(x, y, z);
+
+            const upperGeo = new THREE.BoxGeometry(width, upperLength, width);
+            const upperMesh = new THREE.Mesh(upperGeo, matUpper);
+            upperMesh.position.y = -upperLength / 2;
+            upperMesh.castShadow = true;
+            root.add(upperMesh);
+
+            const lowerGroup = new THREE.Group();
+            lowerGroup.position.set(0, -upperLength, 0); 
+
+            const lowerGeo = new THREE.BoxGeometry(width, lowerLength, width);
+            const lowerMesh = new THREE.Mesh(lowerGeo, matLower);
+            lowerMesh.position.y = -lowerLength / 2;
+            lowerMesh.castShadow = true;
+            lowerGroup.add(lowerMesh);
+
+            root.add(lowerGroup);
+            return { root: root, lower: lowerGroup };
+        }
+
+        const armL = createJointedLimb(0.25, 0.6, 0.6, matSkin, matSkin, -0.55, 2.1, 0);
+        const armR = createJointedLimb(0.25, 0.6, 0.6, matSkin, matSkin, 0.55, 2.1, 0);
+        runnerBody.add(armL.root);
+        runnerBody.add(armR.root);
+
+        const legL = createJointedLimb(0.3, 0.7, 0.7, matPants, matSkin, -0.25, 1.0, 0);
+        const legR = createJointedLimb(0.3, 0.7, 0.7, matPants, matSkin, 0.25, 1.0, 0);
+        runner.add(legL.root);
+        runner.add(legR.root);
+
+        runner.rotation.y = 0;
+        runner.rotation.x = 0.12; 
+        headGroup.rotation.x = -0.12; 
+        
+        runner.position.set(0, 0, startLineZ); 
+        scene.add(runner);
+
+        // --- Timer & Logic State ---
+        let isRunning = false;
+        let isFinished = false;
+        let timeRemaining = 0;
+        let runSpeed = 0;
+        let animCycle = 0;
+        
+        const startBtn = document.getElementById('start-btn');
+        const timerDisplay = document.getElementById('timer-display');
+
+        function formatTime(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        startBtn.addEventListener('click', () => {
+            initAudio(); // Initialize audio context on user interaction
+            
+            const h = parseInt(document.getElementById('hours').value) || 0;
+            const m = parseInt(document.getElementById('minutes').value) || 0;
+            const s = parseInt(document.getElementById('seconds').value) || 0;
+            
+            timeRemaining = h * 3600 + m * 60 + s;
+            
+            if (timeRemaining > 0) {
+                runSpeed = totalDistance / timeRemaining;
+                
+                isRunning = true;
+                isFinished = false;
+                runner.position.z = startLineZ;
+                finishTape.visible = true;
+                
+                startBtn.disabled = true;
+                document.getElementById('hours').disabled = true;
+                document.getElementById('minutes').disabled = true;
+                document.getElementById('seconds').disabled = true;
+            }
+        });
+
+        // --- Animation Loop ---
+        const clock = new THREE.Clock();
+        const roadAngleOffset = 0.15; 
+        const cameraDistance = 12;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            if (isRunning) {
+                timeRemaining -= delta;
+                
+                if (timeRemaining <= 0) {
+                    timeRemaining = 0;
+                    isRunning = false;
+                    isFinished = true;
+                    runner.position.z = finishLineZ; // Snap to finish line
+                    finishTape.visible = false;      // Break the tape
+                    
+                    playVictorySound();              // Play the alarm/fanfare sound
+                    
+                    // Re-enable inputs
+                    startBtn.disabled = false;
+                    document.getElementById('hours').disabled = false;
+                    document.getElementById('minutes').disabled = false;
+                    document.getElementById('seconds').disabled = false;
+                } else {
+                    runner.position.z += runSpeed * delta;
+                    // Fix animation cycle speed so it looks natural regardless of actual movement speed
+                    animCycle += delta * 15; 
+                }
+                
+                timerDisplay.innerText = formatTime(timeRemaining);
+            }
+
+            // --- Runner Animation States ---
+            if (isFinished) {
+                // Victory Pose
+                armL.root.rotation.x = 3.14; 
+                armL.root.rotation.z = -0.4; 
+                armL.lower.rotation.x = 0;   
+                
+                armR.root.rotation.x = 3.14; 
+                armR.root.rotation.z = 0.4;  
+                armR.lower.rotation.x = 0;
+
+                runnerBody.rotation.x = -0.2; 
+                runnerBody.rotation.y = 0;
+                headGroup.rotation.x = -0.3; 
+                
+                // Reset legs
+                legL.root.rotation.x = 0;
+                legR.root.rotation.x = 0;
+                legL.lower.rotation.x = 0;
+                legR.lower.rotation.x = 0;
+                runner.position.y = 0;
+
+            } else if (isRunning) {
+                // Normal Running
+                armL.root.rotation.z = 0;
+                armR.root.rotation.z = 0;
+                runnerBody.rotation.x = 0;
+                headGroup.rotation.x = -0.12;
+
+                legL.root.rotation.x = Math.sin(animCycle) * 1.0 - 0.3;
+                legR.root.rotation.x = Math.sin(animCycle + Math.PI) * 1.0 - 0.3;
+                legL.lower.rotation.x = Math.max(0, -Math.cos(animCycle - 0.5)) * 2.2;
+                legR.lower.rotation.x = Math.max(0, -Math.cos(animCycle + Math.PI - 0.5)) * 2.2;
+                runner.position.y = Math.abs(Math.sin(animCycle)) * 0.25;
+
+                armL.root.rotation.x = Math.sin(animCycle + Math.PI) * 0.9;
+                armR.root.rotation.x = Math.sin(animCycle) * 0.9;
+
+                armL.lower.rotation.x = -1.5 + Math.cos(animCycle + Math.PI) * 0.15;
+                armR.lower.rotation.x = -1.5 + Math.cos(animCycle) * 0.15;
+
+                runnerBody.rotation.y = Math.sin(animCycle) * 0.1;
+            } else {
+                // Idle State (Before starting)
+                armL.root.rotation.set(0, 0, 0);
+                armR.root.rotation.set(0, 0, 0);
+                armL.lower.rotation.x = -0.2;
+                armR.lower.rotation.x = -0.2;
+                
+                legL.root.rotation.x = 0;
+                legR.root.rotation.x = 0;
+                legL.lower.rotation.x = 0;
+                legR.lower.rotation.x = 0;
+                
+                runnerBody.rotation.set(0, 0, 0);
+                headGroup.rotation.x = 0;
+                runner.position.y = 0;
+            }
+
+            // Animate Audience
+            spectators.forEach(spec => {
+                const t = time * spec.speed + spec.phase;
+                spec.group.position.y = Math.max(0, Math.sin(t)) * 0.4;
+                spec.armL.rotation.z = -2.5 + Math.sin(t * 1.2) * 0.5;
+                spec.armR.rotation.z = 2.5 + Math.cos(t * 1.2) * 0.5;
+                spec.group.rotation.x = Math.sin(t * 0.8) * 0.1;
+            });
+
+            // Camera positioning
+            camera.position.z = runner.position.z + cameraDistance;
+            camera.position.x = -cameraDistance * roadAngleOffset; 
+            camera.position.y = 3; 
+            
+            camera.lookAt(100 * roadAngleOffset, 3, runner.position.z - 100);
+            runner.rotation.y = Math.atan(roadAngleOffset);
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
