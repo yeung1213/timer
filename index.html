@@ -301,7 +301,8 @@
         ground.receiveShadow = true;
         scene.add(ground);
 
-        const roadGeo = new THREE.PlaneGeometry(24, 500);
+        // Reduced road width from 24 to 12
+        const roadGeo = new THREE.PlaneGeometry(12, 500);
         const road = new THREE.Mesh(roadGeo, matRoad);
         road.rotation.x = -Math.PI / 2;
         road.position.y = 0.05;
@@ -309,7 +310,8 @@
         scene.add(road);
 
         const rails = [];
-        const trackOffsets = [-3, -1.5, 1.5, 3];
+        // Adjusted track offsets to fit the narrower road
+        const trackOffsets = [-2, -0.6, 0.6, 2];
         trackOffsets.forEach(offset => {
             const railGeo = new THREE.PlaneGeometry(0.2, 500);
             const rail = new THREE.Mesh(railGeo, matRail);
@@ -323,7 +325,8 @@
         // --- Finish Line Elements ---
         let finishLineZ = 40; // Dynamic Z position
 
-        const flGeo = new THREE.PlaneGeometry(24, 12);
+        // Reduced finish line ground width to 12
+        const flGeo = new THREE.PlaneGeometry(12, 12);
         const flMat = new THREE.MeshStandardMaterial({ map: texFinishLine, roughness: 0.6 });
         const finishLineGround = new THREE.Mesh(flGeo, flMat);
         finishLineGround.rotation.x = -Math.PI / 2;
@@ -331,7 +334,8 @@
         finishLineGround.receiveShadow = true;
         scene.add(finishLineGround);
 
-        const tapeGeo = new THREE.PlaneGeometry(24, 1.2);
+        // Reduced tape width to 12
+        const tapeGeo = new THREE.PlaneGeometry(12, 1.2);
         const tapeMat = new THREE.MeshStandardMaterial({ map: texTape, side: THREE.DoubleSide, transparent: true, roughness: 0.8 });
         const finishTape = new THREE.Mesh(tapeGeo, tapeMat);
         finishTape.position.set(0, 1.8, finishLineZ);
@@ -345,7 +349,8 @@
         clockBox.position.y = 4.5; clockBox.castShadow = true; clockBox.receiveShadow = true; clockGroup.add(clockBox);
         const screen = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 1.5), new THREE.MeshStandardMaterial({color: 0x000000, roughness: 0.2}));
         screen.position.set(0, 4.5, 0.76); clockGroup.add(screen);
-        clockGroup.position.set(10, 0, finishLineZ);
+        // Moved clock closer to the narrower road edge
+        clockGroup.position.set(7, 0, finishLineZ);
         clockGroup.rotation.y = -0.2;
         scene.add(clockGroup);
 
@@ -415,7 +420,6 @@
             const specGroup = new THREE.Group();
             const matSpecShirt = audienceMats[Math.floor(Math.random() * audienceMats.length)];
             
-            // ADDED LEGS: Spectators were floating previously!
             const legs = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.3), matPants);
             legs.position.y = 0.25; 
             legs.castShadow = true; legs.receiveShadow = true; 
@@ -447,19 +451,23 @@
         }
 
         for(let z = 0; z < wrapLength; z += 35) {
-            scenery.push({ mesh: createClassicalBuilding(-25, z, 20, 50 + Math.random() * 20, 25, false), baseZ: z });
-            scenery.push({ mesh: createClassicalBuilding(25, z, 20, 60 + Math.random() * 20, 25, (z % 70 === 0)), baseZ: z });
-            scenery.push({ mesh: createTree(-14, z + 5), baseZ: z + 5 });
-            scenery.push({ mesh: createTree(14, z - 5), baseZ: z - 5 });
-            scenery.push({ mesh: createPole(-13, z), baseZ: z });
-            scenery.push({ mesh: createPole(13, z + 10), baseZ: z + 10 });
+            // Kept buildings far back to maintain the wide sidewalk feel
+            scenery.push({ mesh: createClassicalBuilding(-30, z, 20, 50 + Math.random() * 20, 25, false), baseZ: z });
+            scenery.push({ mesh: createClassicalBuilding(30, z, 20, 60 + Math.random() * 20, 25, (z % 70 === 0)), baseZ: z });
+            
+            // Moved trees and poles closer to the new narrower road edge
+            scenery.push({ mesh: createTree(-15, z + 5), baseZ: z + 5 });
+            scenery.push({ mesh: createTree(15, z - 5), baseZ: z - 5 });
+            scenery.push({ mesh: createPole(-10, z), baseZ: z });
+            scenery.push({ mesh: createPole(10, z + 10), baseZ: z + 10 });
         }
 
         for (let z = 0; z < wrapLength; z += 1.5 + Math.random() * 2) {
-            if (Math.random() > 0.2) scenery.push({ mesh: createSpectator(-4.5 - Math.random() * 1.5, z, true), baseZ: z });
-            if (Math.random() > 0.4) scenery.push({ mesh: createSpectator(-6.5 - Math.random() * 2.0, z + Math.random(), true), baseZ: z });
-            if (Math.random() > 0.2) scenery.push({ mesh: createSpectator(4.5 + Math.random() * 1.5, z, false), baseZ: z });
-            if (Math.random() > 0.4) scenery.push({ mesh: createSpectator(6.5 + Math.random() * 2.0, z + Math.random(), false), baseZ: z });
+            // Moved spectators closer to the new narrower road edge (±7 to ±9 range)
+            if (Math.random() > 0.2) scenery.push({ mesh: createSpectator(-7 - Math.random() * 2.0, z, true), baseZ: z });
+            if (Math.random() > 0.4) scenery.push({ mesh: createSpectator(-9 - Math.random() * 2.0, z + Math.random(), true), baseZ: z });
+            if (Math.random() > 0.2) scenery.push({ mesh: createSpectator(7 + Math.random() * 2.0, z, false), baseZ: z });
+            if (Math.random() > 0.4) scenery.push({ mesh: createSpectator(9 + Math.random() * 2.0, z + Math.random(), false), baseZ: z });
         }
 
         // --- Runner ---
