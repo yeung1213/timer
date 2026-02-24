@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Runner - Constant Speed & Endless World</title>
+    <title>Runner - High Contrast 2 PM</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #2b6cc4;
+            background-color: #3a8cf0;
             font-family: sans-serif;
         }
         #canvas-container {
@@ -23,7 +23,7 @@
             color: white;
             font-size: 24px;
             font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
             pointer-events: none;
             z-index: 10;
         }
@@ -32,14 +32,15 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.8);
             padding: 20px;
             border-radius: 10px;
             color: white;
             text-align: center;
             z-index: 20;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.5);
             display: none;
+            backdrop-filter: blur(5px);
         }
         .input-group {
             display: flex;
@@ -59,9 +60,12 @@
             font-size: 16px;
             border: none;
             border-radius: 5px;
+            background: #fff;
+            color: #000;
+            font-weight: bold;
         }
         button {
-            background-color: #fbd015;
+            background-color: #ffcc00;
             color: #0a1945;
             border: none;
             padding: 10px 20px;
@@ -72,10 +76,11 @@
             transition: background 0.2s;
         }
         button:hover {
-            background-color: #e5bd13;
+            background-color: #e6b800;
         }
         button:disabled {
-            background-color: #888;
+            background-color: #555;
+            color: #aaa;
             cursor: not-allowed;
         }
         #timer-display {
@@ -83,7 +88,8 @@
             font-weight: bold;
             font-family: monospace;
             margin-top: 10px;
-            color: #fbd015;
+            color: #ffcc00;
+            text-shadow: 0 0 15px rgba(255, 204, 0, 0.5);
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -113,7 +119,7 @@
     <div id="canvas-container"></div>
 
     <script>
-        // --- Web Audio API Setup (Synthesized Victory Sound) ---
+        // --- Web Audio API Setup ---
         let audioCtx;
 
         function initAudio() {
@@ -148,55 +154,68 @@
             };
 
             const now = audioCtx.currentTime;
-            playNote(261.63, now, 0.15);       // C4
-            playNote(329.63, now + 0.15, 0.15); // E4
-            playNote(392.00, now + 0.30, 0.15); // G4
-            playNote(523.25, now + 0.45, 1.0); // C5
-            playNote(329.63, now + 0.45, 1.0); // E4
-            playNote(392.00, now + 0.45, 1.0); // G4
+            playNote(261.63, now, 0.15);       
+            playNote(329.63, now + 0.15, 0.15); 
+            playNote(392.00, now + 0.30, 0.15); 
+            playNote(523.25, now + 0.45, 1.0); 
+            playNote(329.63, now + 0.45, 1.0); 
+            playNote(392.00, now + 0.45, 1.0); 
         }
 
         // --- Setup ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x2b6cc4); 
-        scene.fog = new THREE.Fog(0x2b6cc4, 50, 200);
+        
+        const skyColor = 0x3a8cf0;
+        scene.background = new THREE.Color(skyColor); 
+        scene.fog = new THREE.FogExp2(skyColor, 0.012);
 
         const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
         
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15; 
+        renderer.physicallyCorrectLights = true;
+        
         container.appendChild(renderer.domElement);
 
         document.getElementById('loading').style.display = 'none';
         document.getElementById('ui-panel').style.display = 'block';
 
-        // --- Lighting ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
+        // --- Lights ---
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x887766, 1.6);
+        hemiLight.position.set(0, 200, 0);
+        scene.add(hemiLight);
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
-        dirLight.position.set(-30, 50, 20);
+        const dirLight = new THREE.DirectionalLight(0xfffaf0, 4.0);
         dirLight.castShadow = true;
         dirLight.shadow.camera.top = 80;
         dirLight.shadow.camera.bottom = -80;
         dirLight.shadow.camera.left = -80;
         dirLight.shadow.camera.right = 80;
+        dirLight.shadow.camera.near = 0.1;
+        dirLight.shadow.camera.far = 250;
         dirLight.shadow.mapSize.width = 2048;
         dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.bias = -0.0005;
         scene.add(dirLight);
+        scene.add(dirLight.target);
 
         // --- Procedural Textures ---
         function createClassicalStoneTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 512; canvas.height = 1024;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#e3dfd5'; ctx.fillRect(0, 0, 512, 1024);
+            ctx.fillStyle = '#f0ece1'; ctx.fillRect(0, 0, 512, 1024);
             ctx.lineWidth = 2;
             for(let i = 0; i < 1024; i += 16) {
-                ctx.fillStyle = '#c7c3b9'; ctx.fillRect(0, i, 512, 2);
+                ctx.fillStyle = '#b8b3a7'; ctx.fillRect(0, i, 512, 2);
                 ctx.fillStyle = '#ffffff'; ctx.fillRect(0, i+2, 512, 1);
             }
             const cols = 5, rows = 12, winW = 50, winH = 65;
@@ -206,21 +225,22 @@
                 for(let c = 0; c < cols; c++) {
                     const x = spacingX + c * (winW + spacingX);
                     const y = 1024 - 150 - r * (winH + spacingY) - winH; 
-                    ctx.fillStyle = '#a39f95'; ctx.fillRect(x - 4, y - 4, winW + 8, winH + 8);
-                    ctx.fillStyle = '#1c2836'; ctx.fillRect(x, y, winW, winH);
-                    ctx.fillStyle = '#3a4a5a'; ctx.fillRect(x + winW/2 - 2, y, 4, winH); ctx.fillRect(x, y + winH/2 - 2, winW, 4);
+                    ctx.fillStyle = '#8f8b80'; ctx.fillRect(x - 4, y - 4, winW + 8, winH + 8);
+                    ctx.fillStyle = '#0f1722'; ctx.fillRect(x, y, winW, winH);
+                    ctx.fillStyle = '#2a3a4a'; ctx.fillRect(x + winW/2 - 2, y, 4, winH); ctx.fillRect(x, y + winH/2 - 2, winW, 4);
                 }
             }
             ctx.fillStyle = '#d1cdbc'; ctx.fillRect(0, 1024 - 120, 512, 120);
             for(let c = 0; c < cols; c++) {
                 const x = spacingX + c * (winW + spacingX);
                 const y = 1024 - 100;
-                ctx.fillStyle = '#111820'; ctx.fillRect(x - 10, y, winW + 20, 100);
-                ctx.fillStyle = '#8a867d'; ctx.fillRect(x - 10, y, winW + 20, 5);
+                ctx.fillStyle = '#0a0f14'; ctx.fillRect(x - 10, y, winW + 20, 100);
+                ctx.fillStyle = '#6a665d'; ctx.fillRect(x - 10, y, winW + 20, 5);
                 ctx.fillRect(x - 10, y, 5, 100); ctx.fillRect(x + winW + 5, y, 5, 100);
             }
             const tex = new THREE.CanvasTexture(canvas);
             tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            tex.encoding = THREE.sRGBEncoding;
             return tex;
         }
 
@@ -228,15 +248,17 @@
             const canvas = document.createElement('canvas');
             canvas.width = 1024; canvas.height = 512;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#2b3b8c'; ctx.fillRect(0, 0, 1024, 512);
-            ctx.fillStyle = '#fbd015'; ctx.font = 'bold 180px sans-serif';
+            ctx.fillStyle = '#1a2b8c'; ctx.fillRect(0, 0, 1024, 512);
+            ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 180px sans-serif';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.scale(1, 0.8); ctx.fillText('FINISH', 512, 420); ctx.scale(1, 1.25); 
             ctx.fillStyle = '#ffffff'; ctx.font = 'bold 45px sans-serif'; ctx.letterSpacing = '10px';
             ctx.fillText('2025 CITY MARATHON', 512, 150);
             ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4;
             ctx.beginPath(); ctx.moveTo(50, 220); ctx.lineTo(974, 220); ctx.stroke();
-            return new THREE.CanvasTexture(canvas);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.encoding = THREE.sRGBEncoding;
+            return tex;
         }
 
         function createTapeTexture() {
@@ -244,10 +266,12 @@
             canvas.width = 1024; canvas.height = 128;
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#0a1945'; ctx.fillRect(0, 0, 1024, 128);
-            ctx.fillStyle = '#fbd015'; ctx.font = 'bold 40px sans-serif';
+            ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 40px sans-serif';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText('CITY MARATHON', 512, 64);
-            return new THREE.CanvasTexture(canvas);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.encoding = THREE.sRGBEncoding;
+            return tex;
         }
 
         const texStone = createClassicalStoneTexture();
@@ -255,20 +279,20 @@
         const texTape = createTapeTexture();
 
         // --- Materials ---
-        const matSidewalk = new THREE.MeshPhongMaterial({ color: 0xcccccc, flatShading: true });
-        const matRoad = new THREE.MeshPhongMaterial({ color: 0x444444, flatShading: true });
-        const matRail = new THREE.MeshStandardMaterial({ color: 0x999999, metalness: 0.8, roughness: 0.2 });
-        const matCornice = new THREE.MeshPhongMaterial({ color: 0xd1cdbc });
-        const matRoofTrim = new THREE.MeshPhongMaterial({ color: 0x4a7c59 });
-        const matPole = new THREE.MeshPhongMaterial({ color: 0x222222 });
-        const matLeaves = new THREE.MeshPhongMaterial({ color: 0x2d5a27, flatShading: true });
-        const matTrunk = new THREE.MeshPhongMaterial({ color: 0x4a3b2c });
-        const matSkin = new THREE.MeshPhongMaterial({ color: 0xffccaa, flatShading: true });
-        const matShirt = new THREE.MeshPhongMaterial({ color: 0x228833, flatShading: true }); 
-        const matPants = new THREE.MeshPhongMaterial({ color: 0x111111, flatShading: true });
+        const matSidewalk = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.9, metalness: 0.0 });
+        const matRoad = new THREE.MeshStandardMaterial({ color: 0x262626, roughness: 0.8, metalness: 0.1 });
+        const matRail = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.8 });
+        const matCornice = new THREE.MeshStandardMaterial({ color: 0xe0dccc, roughness: 0.7 });
+        const matRoofTrim = new THREE.MeshStandardMaterial({ color: 0x2a5c39, roughness: 0.8 });
+        const matPole = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5, metalness: 0.6 });
+        const matLeaves = new THREE.MeshStandardMaterial({ color: 0x1d4a17, roughness: 0.9 });
+        const matTrunk = new THREE.MeshStandardMaterial({ color: 0x3a2b1c, roughness: 1.0 });
+        const matSkin = new THREE.MeshStandardMaterial({ color: 0xffbbaa, roughness: 0.4, metalness: 0.1 });
+        const matShirt = new THREE.MeshStandardMaterial({ color: 0x00aa22, roughness: 0.9 }); 
+        const matPants = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.9 });
 
-        const audienceColors = [0xd32f2f, 0x1976d2, 0x388e3c, 0xfbc02d, 0x7b1fa2, 0x0097a7, 0xe64a19, 0xffeb3b, 0xffffff, 0x000000];
-        const audienceMats = audienceColors.map(c => new THREE.MeshPhongMaterial({ color: c, flatShading: true }));
+        const audienceColors = [0xff0000, 0x0055ff, 0x00aa00, 0xffcc00, 0xaa00ff, 0x00ccff, 0xff5500, 0xffee00, 0xffffff, 0x111111];
+        const audienceMats = audienceColors.map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }));
 
         // --- Infinite Ground & Road ---
         const groundGeo = new THREE.PlaneGeometry(500, 500);
@@ -291,15 +315,16 @@
             const rail = new THREE.Mesh(railGeo, matRail);
             rail.rotation.x = -Math.PI / 2;
             rail.position.set(offset, 0.06, 0);
+            rail.receiveShadow = true;
             scene.add(rail);
             rails.push(rail);
         });
 
-        // --- Finish Line Elements (Fixed Position) ---
-        const finishLineZ = 40;
+        // --- Finish Line Elements ---
+        let finishLineZ = 40; // Dynamic Z position
 
         const flGeo = new THREE.PlaneGeometry(24, 12);
-        const flMat = new THREE.MeshPhongMaterial({ map: texFinishLine });
+        const flMat = new THREE.MeshStandardMaterial({ map: texFinishLine, roughness: 0.6 });
         const finishLineGround = new THREE.Mesh(flGeo, flMat);
         finishLineGround.rotation.x = -Math.PI / 2;
         finishLineGround.position.set(0, 0.07, finishLineZ);
@@ -307,17 +332,18 @@
         scene.add(finishLineGround);
 
         const tapeGeo = new THREE.PlaneGeometry(24, 1.2);
-        const tapeMat = new THREE.MeshBasicMaterial({ map: texTape, side: THREE.DoubleSide, transparent: true });
+        const tapeMat = new THREE.MeshStandardMaterial({ map: texTape, side: THREE.DoubleSide, transparent: true, roughness: 0.8 });
         const finishTape = new THREE.Mesh(tapeGeo, tapeMat);
         finishTape.position.set(0, 1.8, finishLineZ);
+        finishTape.castShadow = true;
         scene.add(finishTape);
 
         const clockGroup = new THREE.Group();
-        const clockStand = new THREE.Mesh(new THREE.BoxGeometry(1, 4, 1), new THREE.MeshPhongMaterial({color: 0x111111}));
-        clockStand.position.y = 2; clockGroup.add(clockStand);
-        const clockBox = new THREE.Mesh(new THREE.BoxGeometry(5, 2, 1.5), new THREE.MeshPhongMaterial({color: 0x0a1945}));
-        clockBox.position.y = 4.5; clockGroup.add(clockBox);
-        const screen = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 1.5), new THREE.MeshBasicMaterial({color: 0x000000}));
+        const clockStand = new THREE.Mesh(new THREE.BoxGeometry(1, 4, 1), new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.5, metalness: 0.8}));
+        clockStand.position.y = 2; clockStand.castShadow = true; clockStand.receiveShadow = true; clockGroup.add(clockStand);
+        const clockBox = new THREE.Mesh(new THREE.BoxGeometry(5, 2, 1.5), new THREE.MeshStandardMaterial({color: 0x0a1945, roughness: 0.4}));
+        clockBox.position.y = 4.5; clockBox.castShadow = true; clockBox.receiveShadow = true; clockGroup.add(clockBox);
+        const screen = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 1.5), new THREE.MeshStandardMaterial({color: 0x000000, roughness: 0.2}));
         screen.position.set(0, 4.5, 0.76); clockGroup.add(screen);
         clockGroup.position.set(10, 0, finishLineZ);
         clockGroup.rotation.y = -0.2;
@@ -331,9 +357,9 @@
         function createTree(x, z) {
             const tree = new THREE.Group();
             const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 3, 5), matTrunk);
-            trunk.position.y = 1.5; trunk.castShadow = true; tree.add(trunk);
+            trunk.position.y = 1.5; trunk.castShadow = true; trunk.receiveShadow = true; tree.add(trunk);
             const leaves = new THREE.Mesh(new THREE.DodecahedronGeometry(2.5, 1), matLeaves);
-            leaves.position.y = 4.5; leaves.castShadow = true; tree.add(leaves);
+            leaves.position.y = 4.5; leaves.castShadow = true; leaves.receiveShadow = true; tree.add(leaves);
             tree.position.set(x, 0, z);
             scene.add(tree);
             return tree;
@@ -341,7 +367,8 @@
 
         function createPole(x, z) {
             const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 12, 8), matPole);
-            pole.position.set(x, 6, z); pole.castShadow = true;
+            pole.position.set(x, 6, z);
+            pole.castShadow = true; pole.receiveShadow = true;
             scene.add(pole);
             return pole;
         }
@@ -351,11 +378,11 @@
             const bldgTexture = texStone.clone();
             bldgTexture.needsUpdate = true;
             bldgTexture.repeat.set(width / 15, height / 25);
-            const matFacade = new THREE.MeshPhongMaterial({ map: bldgTexture });
-            const matRoof = new THREE.MeshPhongMaterial({ color: 0x888888 });
+            const matFacade = new THREE.MeshStandardMaterial({ map: bldgTexture, roughness: 0.8 });
+            const matRoof = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9 });
 
             let mesh;
-            const radius = width / 2; // Fixed: Use half width for radius so curved buildings don't bulge out
+            const radius = width / 2; 
             
             if (isCurved) {
                 mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 16, 1, false, 0, Math.PI), [matFacade, matFacade, matRoof]);
@@ -363,16 +390,20 @@
             } else {
                 mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), [matFacade, matFacade, matRoof, matRoof, matFacade, matFacade]);
             }
-            mesh.position.y = height / 2; mesh.castShadow = true; mesh.receiveShadow = true; bldgGroup.add(mesh);
+            mesh.position.y = height / 2; 
+            mesh.castShadow = true; mesh.receiveShadow = true;
+            bldgGroup.add(mesh);
 
             const corniceGeo = isCurved ? new THREE.CylinderGeometry(radius + 1, radius + 0.5, 1.5, 16, 1, false, 0, Math.PI) : new THREE.BoxGeometry(width + 2, 1.5, depth + 2);
             const cornice = new THREE.Mesh(corniceGeo, matCornice);
             cornice.position.y = height; if (isCurved) cornice.rotation.y = x > 0 ? -Math.PI/2 : Math.PI/2;
-            cornice.castShadow = true; bldgGroup.add(cornice);
+            cornice.castShadow = true; cornice.receiveShadow = true;
+            bldgGroup.add(cornice);
 
             const trimGeo = isCurved ? new THREE.CylinderGeometry(radius + 0.8, radius + 1, 0.8, 16, 1, false, 0, Math.PI) : new THREE.BoxGeometry(width + 1.6, 0.8, depth + 1.6);
             const trim = new THREE.Mesh(trimGeo, matRoofTrim);
             trim.position.y = height + 1; if (isCurved) trim.rotation.y = x > 0 ? -Math.PI/2 : Math.PI/2;
+            trim.castShadow = true; trim.receiveShadow = true;
             bldgGroup.add(trim);
 
             bldgGroup.position.set(x, 0, z);
@@ -384,16 +415,22 @@
             const specGroup = new THREE.Group();
             const matSpecShirt = audienceMats[Math.floor(Math.random() * audienceMats.length)];
             
+            // ADDED LEGS: Spectators were floating previously!
+            const legs = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.3), matPants);
+            legs.position.y = 0.25; 
+            legs.castShadow = true; legs.receiveShadow = true; 
+            specGroup.add(legs);
+
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.9, 0.3), matSpecShirt);
-            body.position.y = 0.95; body.castShadow = true; specGroup.add(body);
+            body.position.y = 0.95; body.castShadow = true; body.receiveShadow = true; specGroup.add(body);
 
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), matSkin);
-            head.position.y = 1.6; head.castShadow = true; specGroup.add(head);
+            head.position.y = 1.6; head.castShadow = true; head.receiveShadow = true; specGroup.add(head);
 
             function createArm(armX) {
                 const pivot = new THREE.Group(); pivot.position.set(armX, 1.3, 0); 
                 const arm = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.5, 0.15), matSkin);
-                arm.position.y = -0.25; arm.castShadow = true; pivot.add(arm);
+                arm.position.y = -0.25; arm.castShadow = true; arm.receiveShadow = true; pivot.add(arm);
                 return pivot;
             }
 
@@ -409,7 +446,6 @@
             return specGroup;
         }
 
-        // Generate exactly one wrapLength worth of scenery
         for(let z = 0; z < wrapLength; z += 35) {
             scenery.push({ mesh: createClassicalBuilding(-25, z, 20, 50 + Math.random() * 20, 25, false), baseZ: z });
             scenery.push({ mesh: createClassicalBuilding(25, z, 20, 60 + Math.random() * 20, 25, (z % 70 === 0)), baseZ: z });
@@ -431,19 +467,20 @@
         const runnerBody = new THREE.Group(); runner.add(runnerBody);
         
         const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.4), matShirt);
-        torso.position.y = 1.6; torso.castShadow = true; runnerBody.add(torso);
+        torso.position.y = 1.6; torso.castShadow = true; torso.receiveShadow = true; runnerBody.add(torso);
 
         const headGroup = new THREE.Group(); headGroup.position.y = 2.5; runnerBody.add(headGroup);
         const headRunner = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), matSkin);
-        headRunner.castShadow = true; headGroup.add(headRunner);
+        headRunner.castShadow = true; headRunner.receiveShadow = true;
+        headGroup.add(headRunner);
 
         function createJointedLimb(width, upperLength, lowerLength, matUpper, matLower, x, y, z) {
             const root = new THREE.Group(); root.position.set(x, y, z);
             const upperMesh = new THREE.Mesh(new THREE.BoxGeometry(width, upperLength, width), matUpper);
-            upperMesh.position.y = -upperLength / 2; upperMesh.castShadow = true; root.add(upperMesh);
+            upperMesh.position.y = -upperLength / 2; upperMesh.castShadow = true; upperMesh.receiveShadow = true; root.add(upperMesh);
             const lowerGroup = new THREE.Group(); lowerGroup.position.set(0, -upperLength, 0); 
             const lowerMesh = new THREE.Mesh(new THREE.BoxGeometry(width, lowerLength, width), matLower);
-            lowerMesh.position.y = -lowerLength / 2; lowerMesh.castShadow = true; lowerGroup.add(lowerMesh);
+            lowerMesh.position.y = -lowerLength / 2; lowerMesh.castShadow = true; lowerMesh.receiveShadow = true; lowerGroup.add(lowerMesh);
             root.add(lowerGroup);
             return { root: root, lower: lowerGroup };
         }
@@ -466,7 +503,6 @@
         let timeRemaining = 0;
         let animCycle = 0;
         
-        // FIXED SPEED CONSTANT (Units per second)
         const CONSTANT_RUN_SPEED = 4.0; 
         
         const startBtn = document.getElementById('start-btn');
@@ -489,9 +525,12 @@
             timeRemaining = h * 3600 + m * 60 + s;
             
             if (timeRemaining > 0) {
-                // Calculate starting distance based on fixed speed
                 const requiredDistance = CONSTANT_RUN_SPEED * timeRemaining;
-                runner.position.z = finishLineZ - requiredDistance;
+                finishLineZ = runner.position.z + requiredDistance;
+                
+                finishLineGround.position.z = finishLineZ;
+                finishTape.position.z = finishLineZ;
+                clockGroup.position.z = finishLineZ;
                 
                 isRunning = true;
                 isFinished = false;
@@ -509,7 +548,6 @@
         const roadAngleOffset = 0.15; 
         const cameraDistance = 12;
 
-        // Modulo function that handles negative numbers properly
         function mod(n, m) { return ((n % m) + m) % m; }
 
         function animate() {
@@ -578,6 +616,10 @@
             camera.position.y = 3; 
             camera.lookAt(100 * roadAngleOffset, 3, runner.position.z - 100);
             runner.rotation.y = Math.atan(roadAngleOffset);
+
+            // --- 2 PM Sun Logic ---
+            dirLight.position.set(camera.position.x + 30, 80, camera.position.z - 20);
+            dirLight.target.position.set(camera.position.x, 0, camera.position.z - 10);
 
             // --- Endless Environment Logic ---
             ground.position.z = camera.position.z;
