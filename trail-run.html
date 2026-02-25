@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trail Runner</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #6faddf; font-family: sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); pointer-events: none; z-index: 10; }
+        #ui-panel { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); padding: 20px; border-radius: 10px; color: white; text-align: center; z-index: 20; box-shadow: 0 6px 12px rgba(0,0,0,0.5); display: none; backdrop-filter: blur(5px); }
+        .input-group { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        .input-group div { display: flex; flex-direction: column; align-items: center; }
+        input { width: 50px; padding: 5px; text-align: center; font-size: 16px; border: none; border-radius: 5px; background: #fff; color: #000; font-weight: bold; }
+        button { background-color: #ff6600; color: #fff; border: none; padding: 10px 20px; font-size: 18px; font-weight: bold; border-radius: 5px; cursor: pointer; transition: background 0.2s; }
+        button:hover { background-color: #e55b00; }
+        button:disabled { background-color: #555; color: #aaa; cursor: not-allowed; }
+        #timer-display { font-size: 48px; font-weight: bold; font-family: monospace; margin-top: 10px; color: #ff6600; text-shadow: 0 0 15px rgba(255,102,0,0.5); }
+        #status-display { font-size: 16px; margin-top: 5px; color: #ccc; min-height: 22px; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div id="loading">Generating Trail Course...</div>
+    <div id="ui-panel">
+        <div class="input-group">
+            <div><input type="number" id="hours" min="0" value="0"><label>Hours</label></div>
+            <div><input type="number" id="minutes" min="0" max="59" value="1"><label>Minutes</label></div>
+            <div><input type="number" id="seconds" min="0" max="59" value="0"><label>Seconds</label></div>
+        </div>
+        <button id="start-btn">Start Trail Run</button>
+        <div id="timer-display">00:00:00</div>
+        <div id="status-display"></div>
+    </div>
+    <div id="canvas-container"></div>
+
+    <script>
+        /* ===== Audio ===== */
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+        function playVictorySound() {
+            if (!audioCtx) return;
+            const playNote = (freq, start, dur, type='square') => {
+                const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+                o.type = type; o.frequency.value = freq;
+                o.connect(g); g.connect(audioCtx.destination);
+                g.gain.setValueAtTime(0, start);
+                g.gain.linearRampToValueAtTime(0.15, start + 0.05);
+                g.gain.setValueAtTime(0.15, start + dur - 0.1);
+                g.gain.linearRampToValueAtTime(0, start + dur);
+                o.start(start); o.stop(start + dur);
+            };
+            const n = audioCtx.currentTime;
+            playNote(261.63, n, 0.15); playNote(329.63, n+0.15, 0.15);
+            playNote(392, n+0.3, 0.15); playNote(523.25, n+0.45, 1);
+            playNote(329.63, n+0.45, 1); playNote(392, n+0.45, 1);
+        }
+
+        /* ===== Scene Setup ===== */
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const skyColor = 0x7ec8e3;
+        scene.background = new THREE.Color(skyColor);
+        scene.fog = new THREE.FogExp2(skyColor, 0.005);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        renderer.physicallyCorrectLights = true;
+        container.appendChild(renderer.domElement);
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('ui-panel').style.display = 'block';
+
+        /* ===== Lights ===== */
+        const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x556b2f, 1.8);
+        hemiLight.position.set(0, 200, 0);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xfffaf0, 3.5);
+        dirLight.castShadow = true;
+        dirLight.shadow.camera.top = 80; dirLight.shadow.camera.bottom = -80;
+        dirLight.shadow.camera.left = -80; dirLight.shadow.camera.right = 80;
+        dirLight.shadow.camera.near = 0.1; dirLight.shadow.camera.far = 250;
+        dirLight.shadow.mapSize.width = 2048; dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.bias = -0.0005;
+        scene.add(dirLight); scene.add(dirLight.target);
+
+        /* ===== Terrain Height System ===== */
+        const wrapLength = 245;
+        const W = 2 * Math.PI / wrapLength;
+
+        function getTerrainHeight(z) {
+            return Math.sin(z * W * 2) * 5 + Math.sin(z * W * 5) * 2 + Math.sin(z * W) * 3.5;
+        }
+        function getTerrainSlope(z) {
+            return Math.cos(z * W * 2) * 5 * W * 2 + Math.cos(z * W * 5) * 2 * W * 5 + Math.cos(z * W) * 3.5 * W;
+        }
+        function getFullHeight(x, z) {
+            let h = getTerrainHeight(z);
+            const tw = 2.5;
+            if (Math.abs(x) > tw) {
+                const d = Math.abs(x) - tw;
+                h += Math.sin(x * 0.08 + z * W * 4) * Math.min(d * 0.25, 6);
+                h += Math.sin(x * 0.15 + z * W * 6) * Math.min(d * 0.1, 3);
+                if (d > 15) h += Math.sin(x * 0.03 + z * W * 2) * Math.min((d - 15) * 0.5, 20);
+            }
+            return h;
+        }
+
+        const BASE_SPEED = 4.0;
+        function getSpeedFactor(slope) {
+            if (slope > 0.08) return Math.max(0.3, 1.0 - slope * 2.2);
+            if (slope < -0.08) return Math.min(1.8, 1.0 - slope * 1.1);
+            return 1.0;
+        }
+        function calculateFinishZ(startZ, totalTime) {
+            const steps = Math.max(2000, Math.ceil(totalTime / 0.02));
+            const dt = totalTime / steps;
+            let z = startZ;
+            for (let i = 0; i < steps; i++) {
+                z += BASE_SPEED * getSpeedFactor(getTerrainSlope(z)) * dt;
+            }
+            return z;
+        }
+
+        /* ===== Materials ===== */
+        const matTrail = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.95 });
+        const matRock = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.95 });
+        const matPine = new THREE.MeshStandardMaterial({ color: 0x1a5c2a, roughness: 0.9 });
+        const matPineDark = new THREE.MeshStandardMaterial({ color: 0x0f3d1a, roughness: 0.9 });
+        const matTrunk = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 1.0 });
+        const matBush = new THREE.MeshStandardMaterial({ color: 0x2d6b1e, roughness: 0.9 });
+        const matSnow = new THREE.MeshStandardMaterial({ color: 0xeef4ff, roughness: 0.6 });
+        const matMountain = new THREE.MeshStandardMaterial({ color: 0x6b7c8e, roughness: 0.95 });
+        const matMountainDark = new THREE.MeshStandardMaterial({ color: 0x555f6a, roughness: 0.95 });
+        const matSkin = new THREE.MeshStandardMaterial({ color: 0xffbbaa, roughness: 0.4, metalness: 0.1 });
+        const matShirt = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.9 });
+        const matPants = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
+        const matShoe = new THREE.MeshStandardMaterial({ color: 0x2255ff, roughness: 0.7 });
+        const matPole = new THREE.MeshStandardMaterial({ color: 0x5a4030, roughness: 0.9 });
+
+        /* ===== Terrain Mesh ===== */
+        function createTerrainGeo(width, segX, segZ) {
+            const geo = new THREE.PlaneGeometry(width, wrapLength, segX, segZ);
+            geo.rotateX(-Math.PI / 2);
+            const pos = geo.attributes.position;
+            const colors = new Float32Array(pos.count * 3);
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i), z = pos.getZ(i);
+                const h = getFullHeight(x, z);
+                pos.setY(i, h);
+                const t = Math.min(1, Math.max(0, (h + 2) / 25));
+                const onTrail = Math.abs(x) < 2.5 ? 1 : 0;
+                colors[i*3]   = onTrail ? 0.55 : 0.22 + t * 0.25;
+                colors[i*3+1] = onTrail ? 0.45 : 0.42 - t * 0.12;
+                colors[i*3+2] = onTrail ? 0.33 : 0.12 + t * 0.15;
+            }
+            geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geo.computeVertexNormals();
+            pos.needsUpdate = true;
+            return geo;
+        }
+
+        function createTrailGeo() {
+            const geo = new THREE.PlaneGeometry(3.5, wrapLength, 3, 120);
+            geo.rotateX(-Math.PI / 2);
+            const pos = geo.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                pos.setY(i, getTerrainHeight(pos.getZ(i)) + 0.06);
+            }
+            geo.computeVertexNormals(); pos.needsUpdate = true;
+            return geo;
+        }
+
+        const matGrass = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
+        const terrainGeo = createTerrainGeo(250, 80, 140);
+        const trailGeo = createTrailGeo();
+
+        const terrainTiles = [], trailTiles = [];
+        for (let i = 0; i < 3; i++) {
+            const t = new THREE.Mesh(terrainGeo, matGrass);
+            t.receiveShadow = true; scene.add(t); terrainTiles.push(t);
+            const tr = new THREE.Mesh(trailGeo, matTrail);
+            tr.receiveShadow = true; scene.add(tr); trailTiles.push(tr);
+        }
+
+        /* ===== Scenery Creation ===== */
+        const scenery = [];
+
+        function createPineTree(x, z) {
+            const tree = new THREE.Group();
+            const s = 0.6 + Math.random() * 0.9;
+            const trk = new THREE.Mesh(new THREE.CylinderGeometry(0.12*s, 0.22*s, 3*s, 5), matTrunk);
+            trk.position.y = 1.5*s; trk.castShadow = true; trk.receiveShadow = true; tree.add(trk);
+            const pm = Math.random() > 0.5 ? matPine : matPineDark;
+            for (let i = 0; i < 4; i++) {
+                const r = (3.0 - i * 0.6) * s;
+                const cone = new THREE.Mesh(new THREE.ConeGeometry(r, 2.8*s, 6), pm);
+                cone.position.y = (2.8 + i * 1.8) * s;
+                cone.castShadow = true; cone.receiveShadow = true; tree.add(cone);
+            }
+            tree.position.set(x, getFullHeight(x, z), z);
+            scene.add(tree); return tree;
+        }
+
+        function createRock(x, z, scale) {
+            const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(scale, 0), matRock);
+            rock.position.set(x, getFullHeight(x, z) + scale * 0.4, z);
+            rock.rotation.set(Math.random()*3, Math.random()*3, 0);
+            rock.castShadow = true; rock.receiveShadow = true;
+            scene.add(rock); return rock;
+        }
+
+        function createBush(x, z) {
+            const bush = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6 + Math.random()*0.5, 1), matBush);
+            bush.position.set(x, getFullHeight(x, z) + 0.35, z);
+            bush.castShadow = true; bush.receiveShadow = true;
+            scene.add(bush); return bush;
+        }
+
+        function createMountain(x, z, radius, height) {
+            const grp = new THREE.Group();
+            const mm = Math.random() > 0.5 ? matMountain : matMountainDark;
+            const base = new THREE.Mesh(new THREE.ConeGeometry(radius, height, 7), mm);
+            base.position.y = height * 0.5 - 5; grp.add(base);
+            if (height > 40) {
+                const snow = new THREE.Mesh(new THREE.ConeGeometry(radius*0.25, height*0.2, 7), matSnow);
+                snow.position.y = height * 0.85; grp.add(snow);
+            }
+            grp.position.set(x, getTerrainHeight(z) - 10, z);
+            scene.add(grp); return grp;
+        }
+
+        function createCloud(x, y, z) {
+            const cg = new THREE.Group();
+            const cm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, transparent: true, opacity: 0.85 });
+            for (let i = 0; i < 5; i++) {
+                const puff = new THREE.Mesh(new THREE.SphereGeometry(2.5 + Math.random()*3, 6, 6), cm);
+                puff.position.set((Math.random()-0.5)*8, (Math.random()-0.5)*2, (Math.random()-0.5)*4);
+                cg.add(puff);
+            }
+            cg.position.set(x, y, z); scene.add(cg); return cg;
+        }
+
+        // Place scenery
+        for (let z = 0; z < wrapLength; z += 6) {
+            // Pine trees
+            if (Math.random() > 0.25) {
+                const x = -(5 + Math.random()*20);
+                scenery.push({ mesh: createPineTree(x, z), baseZ: z });
+            }
+            if (Math.random() > 0.25) {
+                const x = 5 + Math.random()*20;
+                scenery.push({ mesh: createPineTree(x, z), baseZ: z });
+            }
+            // Dense forest further back
+            if (Math.random() > 0.4) {
+                const x = -(20 + Math.random()*25) * (Math.random()>0.5?1:-1);
+                if (Math.abs(x) > 12) scenery.push({ mesh: createPineTree(x, z + Math.random()*6), baseZ: z });
+            }
+        }
+        for (let z = 0; z < wrapLength; z += 4) {
+            // Rocks
+            if (Math.random() > 0.7) {
+                const side = Math.random() > 0.5 ? 1 : -1;
+                const x = side * (2.5 + Math.random()*3);
+                scenery.push({ mesh: createRock(x, z, 0.25 + Math.random()*0.5), baseZ: z });
+            }
+            // Bushes
+            if (Math.random() > 0.75) {
+                const x = (Math.random()>0.5?1:-1) * (3.5 + Math.random()*5);
+                scenery.push({ mesh: createBush(x, z), baseZ: z });
+            }
+        }
+        // Mountains
+        for (let z = 0; z < wrapLength; z += 30) {
+            scenery.push({ mesh: createMountain(-70 - Math.random()*50, z, 25 + Math.random()*20, 35 + Math.random()*35), baseZ: z });
+            scenery.push({ mesh: createMountain(70 + Math.random()*50, z, 25 + Math.random()*20, 35 + Math.random()*35), baseZ: z });
+        }
+        // Clouds
+        for (let z = 0; z < wrapLength; z += 35) {
+            scenery.push({ mesh: createCloud(-40 + Math.random()*80, 50 + Math.random()*30, z), baseZ: z });
+        }
+
+        /* ===== Finish Line ===== */
+        let finishLineZ = 100;
+
+        function createFinishTexture() {
+            const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
+            const ctx = c.getContext('2d');
+            const sq = 64;
+            for (let y = 0; y < 512; y += sq)
+                for (let x = 0; x < 1024; x += sq) {
+                    ctx.fillStyle = ((x+y)/sq)%2===0 ? '#ffffff' : '#222222';
+                    ctx.fillRect(x, y, sq, sq);
+                }
+            ctx.fillStyle = 'rgba(255,102,0,0.85)';
+            ctx.fillRect(180, 180, 664, 150);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 100px sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('FINISH', 512, 255);
+            const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; return tex;
+        }
+        function createTapeTexture() {
+            const c = document.createElement('canvas'); c.width = 1024; c.height = 128;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#ff6600'; ctx.fillRect(0, 0, 1024, 128);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 44px sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('★ TRAIL RUN FINISH ★', 512, 64);
+            const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; return tex;
+        }
+
+        const flGeo = new THREE.PlaneGeometry(8, 8);
+        const flMat = new THREE.MeshStandardMaterial({ map: createFinishTexture(), roughness: 0.7 });
+        const finishLineGround = new THREE.Mesh(flGeo, flMat);
+        finishLineGround.rotation.x = -Math.PI/2;
+        finishLineGround.receiveShadow = true; scene.add(finishLineGround);
+
+        // Finish arch
+        const archGroup = new THREE.Group();
+        const archPoleGeo = new THREE.CylinderGeometry(0.18, 0.25, 5.5, 8);
+        const pL = new THREE.Mesh(archPoleGeo, matPole); pL.position.set(-4, 2.75, 0); pL.castShadow = true; archGroup.add(pL);
+        const pR = new THREE.Mesh(archPoleGeo, matPole); pR.position.set(4, 2.75, 0); pR.castShadow = true; archGroup.add(pR);
+        const crossbar = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.3, 0.3), matPole);
+        crossbar.position.y = 5.2; crossbar.castShadow = true; archGroup.add(crossbar);
+
+        const tapeGeo = new THREE.PlaneGeometry(8, 1.2);
+        const tapeMat = new THREE.MeshStandardMaterial({ map: createTapeTexture(), side: THREE.DoubleSide, transparent: true, roughness: 0.8 });
+        const finishTape = new THREE.Mesh(tapeGeo, tapeMat);
+        finishTape.position.set(0, 2.0, 0); finishTape.castShadow = true; archGroup.add(finishTape);
+        scene.add(archGroup);
+
+        // Clock
+        const clockGroup = new THREE.Group();
+        const clockStand = new THREE.Mesh(new THREE.BoxGeometry(0.8, 3.5, 0.8), new THREE.MeshStandardMaterial({color:0x333333, roughness:0.5, metalness:0.8}));
+        clockStand.position.y = 1.75; clockStand.castShadow = true; clockGroup.add(clockStand);
+        const clockBox = new THREE.Mesh(new THREE.BoxGeometry(4, 1.8, 1.2), new THREE.MeshStandardMaterial({color:0x222222, roughness:0.4}));
+        clockBox.position.y = 4; clockBox.castShadow = true; clockGroup.add(clockBox);
+        const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.3), new THREE.MeshStandardMaterial({color:0x000000, roughness:0.2}));
+        screenMesh.position.set(0, 4, 0.61); clockGroup.add(screenMesh);
+        clockGroup.rotation.y = -0.2;
+        scene.add(clockGroup);
+
+        function updateFinishPositions() {
+            const h = getTerrainHeight(finishLineZ);
+            finishLineGround.position.set(0, h + 0.08, finishLineZ);
+            archGroup.position.set(0, h, finishLineZ);
+            clockGroup.position.set(6, h, finishLineZ);
+        }
+        updateFinishPositions();
+
+        /* ===== Runner ===== */
+        const runner = new THREE.Group();
+        const runnerBody = new THREE.Group(); runner.add(runnerBody);
+
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.1, 0.4), matShirt);
+        torso.position.y = 1.6; torso.castShadow = true; torso.receiveShadow = true; runnerBody.add(torso);
+
+        // Hydration vest detail
+        const vest = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.6, 0.45), new THREE.MeshStandardMaterial({color:0x333333, roughness:0.8}));
+        vest.position.y = 1.8; vest.castShadow = true; runnerBody.add(vest);
+
+        const headGroup = new THREE.Group(); headGroup.position.y = 2.45; runnerBody.add(headGroup);
+        const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), matSkin);
+        headMesh.castShadow = true; headMesh.receiveShadow = true; headGroup.add(headMesh);
+        // Cap
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.12, 0.55), matShirt);
+        cap.position.set(0, 0.22, -0.03); headGroup.add(cap);
+        const brim = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.05, 0.25), matShirt);
+        brim.position.set(0, 0.18, -0.3); headGroup.add(brim);
+
+        function createJointedLimb(w, uLen, lLen, matU, matL, x, y, z) {
+            const root = new THREE.Group(); root.position.set(x, y, z);
+            const upper = new THREE.Mesh(new THREE.BoxGeometry(w, uLen, w), matU);
+            upper.position.y = -uLen/2; upper.castShadow = true; upper.receiveShadow = true; root.add(upper);
+            const lower = new THREE.Group(); lower.position.set(0, -uLen, 0);
+            const lm = new THREE.Mesh(new THREE.BoxGeometry(w, lLen, w), matL);
+            lm.position.y = -lLen/2; lm.castShadow = true; lm.receiveShadow = true; lower.add(lm);
+            root.add(lower);
+            return { root, lower };
+        }
+
+        const armL = createJointedLimb(0.22, 0.55, 0.55, matSkin, matSkin, -0.55, 2.05, 0);
+        const armR = createJointedLimb(0.22, 0.55, 0.55, matSkin, matSkin, 0.55, 2.05, 0);
+        runnerBody.add(armL.root); runnerBody.add(armR.root);
+
+        const legL = createJointedLimb(0.28, 0.65, 0.65, matPants, matShoe, -0.22, 1.05, 0);
+        const legR = createJointedLimb(0.28, 0.65, 0.65, matPants, matShoe, 0.22, 1.05, 0);
+        runner.add(legL.root); runner.add(legR.root);
+
+        runner.position.set(0, getTerrainHeight(0), 0);
+        scene.add(runner);
+
+        /* ===== Timer & State ===== */
+        let isRunning = false, isFinished = false, timeRemaining = 0, animCycle = 0;
+        const startBtn = document.getElementById('start-btn');
+        const timerDisplay = document.getElementById('timer-display');
+        const statusDisplay = document.getElementById('status-display');
+
+        function formatTime(s) {
+            const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = Math.floor(s%60);
+            return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
+        }
+        function lerp(a, b, t) { return a + (b - a) * t; }
+        function clamp(x, mn, mx) { return Math.max(mn, Math.min(mx, x)); }
+
+        startBtn.addEventListener('click', () => {
+            initAudio();
+            const h = parseInt(document.getElementById('hours').value)||0;
+            const m = parseInt(document.getElementById('minutes').value)||0;
+            const s = parseInt(document.getElementById('seconds').value)||0;
+            timeRemaining = h*3600 + m*60 + s;
+            if (timeRemaining > 0) {
+                finishLineZ = calculateFinishZ(runner.position.z, timeRemaining);
+                updateFinishPositions();
+                isRunning = true; isFinished = false;
+                finishTape.visible = true;
+                startBtn.disabled = true;
+                document.getElementById('hours').disabled = true;
+                document.getElementById('minutes').disabled = true;
+                document.getElementById('seconds').disabled = true;
+            }
+        });
+
+        /* ===== Animation Loop ===== */
+        const clock = new THREE.Clock();
+        const cameraBack = 10, cameraSide = -2.5, cameraUp = 4.5;
+        let smoothCamY = cameraUp;
+
+        function mod(n, m) { return ((n % m) + m) % m; }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.05);
+            const time = clock.getElapsedTime();
+
+            let currentSlope = 0, currentSpeedFactor = 1;
+
+            if (isRunning) {
+                currentSlope = getTerrainSlope(runner.position.z);
+                currentSpeedFactor = getSpeedFactor(currentSlope);
+                const speed = BASE_SPEED * currentSpeedFactor;
+                const animSpeedMult = clamp((currentSpeedFactor - 0.3) / 1.2, 0.3, 1.0);
+
+                timeRemaining -= delta;
+                if (timeRemaining <= 0) {
+                    timeRemaining = 0; isRunning = false; isFinished = true;
+                    runner.position.z = finishLineZ;
+                    finishTape.visible = false;
+                    playVictorySound();
+                    startBtn.disabled = false;
+                    document.getElementById('hours').disabled = false;
+                    document.getElementById('minutes').disabled = false;
+                    document.getElementById('seconds').disabled = false;
+                    statusDisplay.innerText = '🏆 FINISHED!';
+                } else {
+                    runner.position.z += speed * delta;
+                    animCycle += delta * (8 + animSpeedMult * 8);
+
+                    // Status
+                    if (currentSlope > 0.08) {
+                        statusDisplay.innerText = '🥾 Walking ▲ Uphill';
+                        statusDisplay.style.color = '#ffaa44';
+                    } else if (currentSlope < -0.08) {
+                        statusDisplay.innerText = '🏃 Running ▼ Downhill';
+                        statusDisplay.style.color = '#44ddff';
+                    } else {
+                        statusDisplay.innerText = '🏃 Running ► Trail';
+                        statusDisplay.style.color = '#88ff88';
+                    }
+                }
+                timerDisplay.innerText = formatTime(timeRemaining);
+            }
+
+            // Runner Y position follows terrain
+            const runnerH = getTerrainHeight(runner.position.z);
+            const slope = getTerrainSlope(runner.position.z);
+            const terrainAngle = Math.atan(slope);
+            const sf = isRunning ? currentSpeedFactor : 1.0;
+            // Blend: 0 = walk, 1 = run
+            const blend = clamp((sf - 0.35) / 0.5, 0, 1);
+
+            /* ===== Animation States ===== */
+            if (isFinished) {
+                runner.position.y = runnerH;
+                runner.rotation.x = terrainAngle;
+                runner.rotation.y = 0;
+                armL.root.rotation.x = 3.14; armL.root.rotation.z = -0.4; armL.lower.rotation.x = 0;
+                armR.root.rotation.x = 3.14; armR.root.rotation.z = 0.4; armR.lower.rotation.x = 0;
+                runnerBody.rotation.x = -0.15; runnerBody.rotation.y = 0;
+                headGroup.rotation.x = -0.3;
+                legL.root.rotation.x = 0; legR.root.rotation.x = 0;
+                legL.lower.rotation.x = 0; legR.lower.rotation.x = 0;
+            } else if (isRunning) {
+                const bounce = lerp(0.02, 0.22, blend);
+                runner.position.y = runnerH + Math.abs(Math.sin(animCycle)) * bounce;
+                runner.rotation.x = terrainAngle + lerp(0.05, 0.14, blend);
+                runner.rotation.y = 0;
+
+                const legSwing = lerp(0.45, 1.0, blend);
+                const legOffset = lerp(-0.1, -0.3, blend);
+                legL.root.rotation.x = Math.sin(animCycle) * legSwing + legOffset;
+                legR.root.rotation.x = Math.sin(animCycle + Math.PI) * legSwing + legOffset;
+                const kneeMax = lerp(1.0, 2.2, blend);
+                legL.lower.rotation.x = Math.max(0, -Math.cos(animCycle - 0.5)) * kneeMax;
+                legR.lower.rotation.x = Math.max(0, -Math.cos(animCycle + Math.PI - 0.5)) * kneeMax;
+
+                const armSwing = lerp(0.3, 0.9, blend);
+                armL.root.rotation.x = Math.sin(animCycle + Math.PI) * armSwing;
+                armR.root.rotation.x = Math.sin(animCycle) * armSwing;
+                armL.root.rotation.z = 0; armR.root.rotation.z = 0;
+                const elbowBend = lerp(-0.8, -1.5, blend);
+                armL.lower.rotation.x = elbowBend + Math.cos(animCycle + Math.PI) * 0.15;
+                armR.lower.rotation.x = elbowBend + Math.cos(animCycle) * 0.15;
+
+                runnerBody.rotation.y = Math.sin(animCycle) * lerp(0.04, 0.1, blend);
+                runnerBody.rotation.x = 0;
+                headGroup.rotation.x = -(terrainAngle + lerp(0.05, 0.14, blend)) + 0.05;
+            } else {
+                runner.position.y = runnerH;
+                runner.rotation.x = terrainAngle;
+                runner.rotation.y = 0;
+                armL.root.rotation.set(0, 0, 0); armR.root.rotation.set(0, 0, 0);
+                armL.lower.rotation.x = -0.2; armR.lower.rotation.x = -0.2;
+                legL.root.rotation.x = 0; legR.root.rotation.x = 0;
+                legL.lower.rotation.x = 0; legR.lower.rotation.x = 0;
+                runnerBody.rotation.set(0, 0, 0); headGroup.rotation.x = 0;
+                statusDisplay.innerText = '';
+            }
+
+            /* ===== Camera ===== */
+            const camZ = runner.position.z + cameraBack;
+            const targetCamY = getTerrainHeight(camZ) + cameraUp;
+            smoothCamY += (targetCamY - smoothCamY) * 0.08;
+            camera.position.set(cameraSide, smoothCamY, camZ);
+            camera.lookAt(runner.position.x + 1, runner.position.y + 1.5, runner.position.z - 20);
+
+            /* ===== Sun ===== */
+            dirLight.position.set(camera.position.x + 40, camera.position.y + 80, camera.position.z - 30);
+            dirLight.target.position.set(camera.position.x, camera.position.y - 80, camera.position.z - 10);
+
+            /* ===== Terrain Tiles ===== */
+            const baseN = Math.round(camera.position.z / wrapLength);
+            for (let i = 0; i < 3; i++) {
+                const tz = (baseN - 1 + i) * wrapLength;
+                terrainTiles[i].position.z = tz;
+                trailTiles[i].position.z = tz;
+            }
+
+            /* ===== Scenery Wrap ===== */
+            const offset = 20;
+            scenery.forEach(item => {
+                item.mesh.position.z = camera.position.z + offset - mod(camera.position.z + offset - item.baseZ, wrapLength);
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
