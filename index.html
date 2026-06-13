@@ -3,116 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Runner - High Contrast 2 PM</title>
+    <title>Sprinter - High Contrast 2 PM</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #3a8cf0;
-            font-family: sans-serif;
-        }
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-        }
+        body { margin: 0; overflow: hidden; background-color: #bfe0f5; font-family: sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; }
         #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-            pointer-events: none;
-            z-index: 10;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; font-size: 24px; font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8); pointer-events: none; z-index: 10;
         }
         #ui-panel {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 20px;
-            border-radius: 10px;
-            color: white;
-            text-align: center;
-            z-index: 20;
-            box-shadow: 0 6px 12px rgba(0,0,0,0.5);
-            display: none;
-            backdrop-filter: blur(5px);
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(10, 25, 69, 0.82); padding: 20px; border-radius: 14px;
+            color: white; text-align: center; z-index: 20;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45); display: none; backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.12);
         }
-        .input-group {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-bottom: 15px;
-        }
-        .input-group div {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
+        .input-group { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        .input-group div { display: flex; flex-direction: column; align-items: center; }
         input {
-            width: 50px;
-            padding: 5px;
-            text-align: center;
-            font-size: 16px;
-            border: none;
-            border-radius: 5px;
-            background: #fff;
-            color: #000;
-            font-weight: bold;
+            width: 50px; padding: 6px; text-align: center; font-size: 16px;
+            border: none; border-radius: 6px; background: #fff; color: #000; font-weight: bold;
         }
+        label { font-size: 12px; margin-top: 4px; opacity: 0.8; }
         button {
-            background-color: #ffcc00;
-            color: #0a1945;
-            border: none;
-            padding: 10px 20px;
-            font-size: 18px;
-            font-weight: bold;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background 0.2s;
+            background-color: #ffcc00; color: #0a1945; border: none; padding: 10px 24px;
+            font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer;
+            transition: all 0.2s; box-shadow: 0 3px 0 #b88f00;
         }
-        button:hover {
-            background-color: #e6b800;
-        }
-        button:disabled {
-            background-color: #555;
-            color: #aaa;
-            cursor: not-allowed;
-        }
+        button:hover { background-color: #ffd633; transform: translateY(-1px); }
+        button:active { transform: translateY(2px); box-shadow: 0 1px 0 #b88f00; }
+        button:disabled { background-color: #555; color: #aaa; cursor: not-allowed; box-shadow: none; transform: none; }
         #timer-display {
-            font-size: 48px;
-            font-weight: bold;
-            font-family: monospace;
-            margin-top: 10px;
-            color: #ffcc00;
-            text-shadow: 0 0 15px rgba(255, 204, 0, 0.5);
+            font-size: 48px; font-weight: bold; font-family: monospace; margin-top: 12px;
+            color: #ffcc00; text-shadow: 0 0 18px rgba(255, 204, 0, 0.6);
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
     <div id="loading">Generating Endless Cityscape...</div>
-    
+
     <div id="ui-panel">
         <div class="input-group" id="input-controls">
-            <div>
-                <input type="number" id="hours" min="0" value="0">
-                <label>Hours</label>
-            </div>
-            <div>
-                <input type="number" id="minutes" min="0" max="59" value="0">
-                <label>Minutes</label>
-            </div>
-            <div>
-                <input type="number" id="seconds" min="0" max="59" value="10">
-                <label>Seconds</label>
-            </div>
+            <div><input type="number" id="hours" min="0" value="0"><label>Hours</label></div>
+            <div><input type="number" id="minutes" min="0" max="59" value="0"><label>Minutes</label></div>
+            <div><input type="number" id="seconds" min="0" max="59" value="10"><label>Seconds</label></div>
         </div>
-        <button id="start-btn">Start Run</button>
+        <button id="start-btn">Start Sprint</button>
         <div id="timer-display">00:00:00</div>
     </div>
 
@@ -121,117 +59,157 @@
     <script>
         // --- Web Audio API Setup ---
         let audioCtx;
-
         function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
         }
-
         function playVictorySound() {
             if (!audioCtx) return;
-
             const playNote = (freq, startTime, duration, type = 'square') => {
                 const osc = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
-                
-                osc.type = type; 
-                osc.frequency.value = freq;
-                
-                osc.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                
+                osc.type = type; osc.frequency.value = freq;
+                osc.connect(gainNode); gainNode.connect(audioCtx.destination);
                 gainNode.gain.setValueAtTime(0, startTime);
                 gainNode.gain.linearRampToValueAtTime(0.15, startTime + 0.05);
                 gainNode.gain.setValueAtTime(0.15, startTime + duration - 0.1);
                 gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
-                
-                osc.start(startTime);
-                osc.stop(startTime + duration);
+                osc.start(startTime); osc.stop(startTime + duration);
             };
-
             const now = audioCtx.currentTime;
-            playNote(261.63, now, 0.15);       
-            playNote(329.63, now + 0.15, 0.15); 
-            playNote(392.00, now + 0.30, 0.15); 
-            playNote(523.25, now + 0.45, 1.0); 
-            playNote(329.63, now + 0.45, 1.0); 
-            playNote(392.00, now + 0.45, 1.0); 
+            playNote(261.63, now, 0.15); playNote(329.63, now + 0.15, 0.15);
+            playNote(392.00, now + 0.30, 0.15); playNote(523.25, now + 0.45, 1.0);
+            playNote(329.63, now + 0.45, 1.0); playNote(392.00, now + 0.45, 1.0);
         }
 
         // --- Setup ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        
-        const skyColor = 0x3a8cf0;
-        scene.background = new THREE.Color(skyColor); 
-        scene.fog = new THREE.FogExp2(skyColor, 0.012);
 
-        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
-        
+        const horizonColor = 0xc9e3f5;
+        scene.fog = new THREE.FogExp2(horizonColor, 0.009);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
+
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.outputEncoding = THREE.sRGBEncoding;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.15; 
+        renderer.toneMappingExposure = 1.1;
         renderer.physicallyCorrectLights = true;
-        
         container.appendChild(renderer.domElement);
 
         document.getElementById('loading').style.display = 'none';
         document.getElementById('ui-panel').style.display = 'block';
 
-        // --- Lights ---
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x887766, 1.6);
-        hemiLight.position.set(0, 200, 0);
-        scene.add(hemiLight);
+        // --- Gradient Sky Dome ---
+        const skyGeo = new THREE.SphereGeometry(600, 32, 20);
+        const skyMat = new THREE.ShaderMaterial({
+            uniforms: {
+                topColor:    { value: new THREE.Color(0x2467c8) },
+                midColor:    { value: new THREE.Color(0x69a8e8) },
+                bottomColor: { value: new THREE.Color(0xd4eaf7) },
+                offset: { value: 80 }, exponent: { value: 0.7 }
+            },
+            vertexShader: `
+                varying vec3 vWorldPosition;
+                void main() {
+                    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                    vWorldPosition = worldPosition.xyz;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }`,
+            fragmentShader: `
+                uniform vec3 topColor; uniform vec3 midColor; uniform vec3 bottomColor;
+                uniform float offset; uniform float exponent;
+                varying vec3 vWorldPosition;
+                void main() {
+                    float h = normalize(vWorldPosition + vec3(0.0, offset, 0.0)).y;
+                    float t = max(pow(max(h, 0.0), exponent), 0.0);
+                    vec3 col = h < 0.0 ? bottomColor : mix(midColor, topColor, t);
+                    col = h < 0.25 && h >= 0.0 ? mix(bottomColor, midColor, h / 0.25) : col;
+                    gl_FragColor = vec4(col, 1.0);
+                }`,
+            side: THREE.BackSide, depthWrite: false
+        });
+        const skyDome = new THREE.Mesh(skyGeo, skyMat);
+        scene.add(skyDome);
 
-        const dirLight = new THREE.DirectionalLight(0xfffaf0, 4.0);
+        // --- Clouds ---
+        function createCloudTexture() {
+            const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+            const ctx = c.getContext('2d');
+            const g = ctx.createRadialGradient(128, 128, 10, 128, 128, 128);
+            g.addColorStop(0, 'rgba(255,255,255,0.95)');
+            g.addColorStop(0.5, 'rgba(255,255,255,0.55)');
+            g.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
+            const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; return tex;
+        }
+        const cloudTex = createCloudTexture();
+        const cloudGroup = new THREE.Group(); scene.add(cloudGroup);
+        const clouds = [];
+        for (let i = 0; i < 14; i++) {
+            const puffs = new THREE.Group();
+            const n = 3 + Math.floor(Math.random() * 3);
+            for (let p = 0; p < n; p++) {
+                const mat = new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.85, depthWrite: false });
+                const s = new THREE.Sprite(mat);
+                const scl = 22 + Math.random() * 26;
+                s.scale.set(scl, scl * 0.6, 1);
+                s.position.set((Math.random() - 0.5) * 40, (Math.random() - 0.5) * 8, 0);
+                puffs.add(s);
+            }
+            const baseX = (Math.random() - 0.5) * 320;
+            const y = 70 + Math.random() * 60;
+            const z = -120 - Math.random() * 280;
+            puffs.position.set(baseX, y, z);
+            cloudGroup.add(puffs);
+            clouds.push({ mesh: puffs, baseX, y, z, drift: 1.5 + Math.random() * 2 });
+        }
+
+        // --- Lights ---
+        const hemiLight = new THREE.HemisphereLight(0xcfe6ff, 0x8a7d63, 1.0);
+        hemiLight.position.set(0, 200, 0); scene.add(hemiLight);
+        const ambient = new THREE.AmbientLight(0xffffff, 0.25); scene.add(ambient);
+
+        const dirLight = new THREE.DirectionalLight(0xfff2dc, 3.2);
         dirLight.castShadow = true;
-        dirLight.shadow.camera.top = 80;
-        dirLight.shadow.camera.bottom = -80;
-        dirLight.shadow.camera.left = -80;
-        dirLight.shadow.camera.right = 80;
-        dirLight.shadow.camera.near = 0.1;
-        dirLight.shadow.camera.far = 250;
-        dirLight.shadow.mapSize.width = 2048;
-        dirLight.shadow.mapSize.height = 2048;
-        dirLight.shadow.bias = -0.0005;
-        scene.add(dirLight);
-        scene.add(dirLight.target);
+        dirLight.shadow.camera.top = 60; dirLight.shadow.camera.bottom = -40;
+        dirLight.shadow.camera.left = -50; dirLight.shadow.camera.right = 50;
+        dirLight.shadow.camera.near = 0.5; dirLight.shadow.camera.far = 220;
+        dirLight.shadow.mapSize.width = 2048; dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.bias = -0.0004; dirLight.shadow.normalBias = 0.02;
+        scene.add(dirLight); scene.add(dirLight.target);
 
         // --- Procedural Textures ---
         function createClassicalStoneTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512; canvas.height = 1024;
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 1024;
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#f0ece1'; ctx.fillRect(0, 0, 512, 1024);
-            ctx.lineWidth = 2;
-            for(let i = 0; i < 1024; i += 16) {
-                ctx.fillStyle = '#b8b3a7'; ctx.fillRect(0, i, 512, 2);
-                ctx.fillStyle = '#ffffff'; ctx.fillRect(0, i+2, 512, 1);
+            for (let i = 0; i < 1024; i += 16) {
+                ctx.fillStyle = '#c4bfb2'; ctx.fillRect(0, i, 512, 2);
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0, i + 2, 512, 1);
             }
             const cols = 5, rows = 12, winW = 50, winH = 65;
             const spacingX = (512 - (cols * winW)) / (cols + 1);
-            const spacingY = (1024 - 150 - (rows * winH)) / rows; 
-            for(let r = 0; r < rows; r++) {
-                for(let c = 0; c < cols; c++) {
+            const spacingY = (1024 - 150 - (rows * winH)) / rows;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
                     const x = spacingX + c * (winW + spacingX);
-                    const y = 1024 - 150 - r * (winH + spacingY) - winH; 
+                    const y = 1024 - 150 - r * (winH + spacingY) - winH;
                     ctx.fillStyle = '#8f8b80'; ctx.fillRect(x - 4, y - 4, winW + 8, winH + 8);
-                    ctx.fillStyle = '#0f1722'; ctx.fillRect(x, y, winW, winH);
-                    ctx.fillStyle = '#2a3a4a'; ctx.fillRect(x + winW/2 - 2, y, 4, winH); ctx.fillRect(x, y + winH/2 - 2, winW, 4);
+                    const gw = ctx.createLinearGradient(x, y, x, y + winH);
+                    gw.addColorStop(0, '#3a566e'); gw.addColorStop(0.5, '#12202c'); gw.addColorStop(1, '#0a121a');
+                    ctx.fillStyle = gw; ctx.fillRect(x, y, winW, winH);
+                    ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(x + 4, y + 4, 14, 22);
+                    ctx.fillStyle = '#2a3a4a'; ctx.fillRect(x + winW / 2 - 2, y, 4, winH); ctx.fillRect(x, y + winH / 2 - 2, winW, 4);
                 }
             }
             ctx.fillStyle = '#d1cdbc'; ctx.fillRect(0, 1024 - 120, 512, 120);
-            for(let c = 0; c < cols; c++) {
+            for (let c = 0; c < cols; c++) {
                 const x = spacingX + c * (winW + spacingX);
                 const y = 1024 - 100;
                 ctx.fillStyle = '#0a0f14'; ctx.fillRect(x - 10, y, winW + 20, 100);
@@ -240,119 +218,133 @@
             }
             const tex = new THREE.CanvasTexture(canvas);
             tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
-            tex.encoding = THREE.sRGBEncoding;
-            return tex;
+            tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4; return tex;
         }
-
+        function createAsphaltTexture() {
+            const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#2b2b2b'; ctx.fillRect(0, 0, 256, 256);
+            for (let i = 0; i < 9000; i++) {
+                const v = Math.random(); const g = 25 + Math.floor(v * 35);
+                ctx.fillStyle = `rgb(${g},${g},${g})`;
+                ctx.fillRect(Math.random() * 256, Math.random() * 256, 1.5, 1.5);
+            }
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(6, 120); tex.encoding = THREE.sRGBEncoding; return tex;
+        }
+        function createPavementTexture() {
+            const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#d8d6cf'; ctx.fillRect(0, 0, 256, 256);
+            for (let i = 0; i < 5000; i++) {
+                const g = 200 + Math.floor(Math.random() * 30);
+                ctx.fillStyle = `rgba(${g},${g},${g-5},0.5)`;
+                ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+            }
+            ctx.strokeStyle = '#b3b0a6'; ctx.lineWidth = 3;
+            for (let i = 0; i <= 256; i += 64) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
+            }
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(40, 80); tex.encoding = THREE.sRGBEncoding; return tex;
+        }
         function createFinishLineTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1024; canvas.height = 512;
+            const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 512;
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#1a2b8c'; ctx.fillRect(0, 0, 1024, 512);
             ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 180px sans-serif';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.scale(1, 0.8); ctx.fillText('FINISH', 512, 420); ctx.scale(1, 1.25); 
+            ctx.scale(1, 0.8); ctx.fillText('FINISH', 512, 420); ctx.scale(1, 1.25);
             ctx.fillStyle = '#ffffff'; ctx.font = 'bold 45px sans-serif'; ctx.letterSpacing = '10px';
-            ctx.fillText('2025 CITY MARATHON', 512, 150);
+            ctx.fillText('2025 CITY SPRINT', 512, 150);
             ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4;
             ctx.beginPath(); ctx.moveTo(50, 220); ctx.lineTo(974, 220); ctx.stroke();
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.encoding = THREE.sRGBEncoding;
-            return tex;
+            const tex = new THREE.CanvasTexture(canvas); tex.encoding = THREE.sRGBEncoding; return tex;
         }
-
         function createTapeTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1024; canvas.height = 128;
+            const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 128;
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#0a1945'; ctx.fillRect(0, 0, 1024, 128);
             ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 40px sans-serif';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText('CITY MARATHON', 512, 64);
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.encoding = THREE.sRGBEncoding;
-            return tex;
+            ctx.fillText('CITY SPRINT', 512, 64);
+            const tex = new THREE.CanvasTexture(canvas); tex.encoding = THREE.sRGBEncoding; return tex;
+        }
+        // Soft blob shadow used for grounding characters
+        function createBlobShadow() {
+            const c = document.createElement('canvas'); c.width = c.height = 128;
+            const ctx = c.getContext('2d');
+            const g = ctx.createRadialGradient(64, 64, 2, 64, 64, 64);
+            g.addColorStop(0, 'rgba(0,0,0,0.55)');
+            g.addColorStop(0.45, 'rgba(0,0,0,0.30)');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
+            return new THREE.CanvasTexture(c);
         }
 
         const texStone = createClassicalStoneTexture();
         const texFinishLine = createFinishLineTexture();
         const texTape = createTapeTexture();
+        const texAsphalt = createAsphaltTexture();
+        const texPavement = createPavementTexture();
+        const texBlob = createBlobShadow();
 
         // --- Materials ---
-        const matSidewalk = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.9, metalness: 0.0 });
-        const matRoad = new THREE.MeshStandardMaterial({ color: 0x262626, roughness: 0.8, metalness: 0.1 });
-        const matRail = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.8 });
+        const matSidewalk = new THREE.MeshStandardMaterial({ map: texPavement, color: 0xeeeee6, roughness: 0.95, metalness: 0.0 });
+        const matRoad = new THREE.MeshStandardMaterial({ map: texAsphalt, roughness: 0.85, metalness: 0.05 });
+        const matRail = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.35, metalness: 0.85 });
         const matCornice = new THREE.MeshStandardMaterial({ color: 0xe0dccc, roughness: 0.7 });
         const matRoofTrim = new THREE.MeshStandardMaterial({ color: 0x2a5c39, roughness: 0.8 });
-        const matPole = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5, metalness: 0.6 });
-        const matLeaves = new THREE.MeshStandardMaterial({ color: 0x1d4a17, roughness: 0.9 });
-        const matTrunk = new THREE.MeshStandardMaterial({ color: 0x3a2b1c, roughness: 1.0 });
-        const matSkin = new THREE.MeshStandardMaterial({ color: 0xffbbaa, roughness: 0.4, metalness: 0.1 });
-        const matShirt = new THREE.MeshStandardMaterial({ color: 0x00aa22, roughness: 0.9 }); 
-        const matPants = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.9 });
+        const matPole = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.45, metalness: 0.65 });
+        const matLeaves = new THREE.MeshStandardMaterial({ color: 0x2d6b22, roughness: 0.95 });
+        const matLeaves2 = new THREE.MeshStandardMaterial({ color: 0x3c8a2c, roughness: 0.95 });
+        const matTrunk = new THREE.MeshStandardMaterial({ color: 0x4a3826, roughness: 1.0 });
+        const matSkin = new THREE.MeshStandardMaterial({ color: 0xf0a98a, roughness: 0.6, metalness: 0.0 });
+        const matShirt = new THREE.MeshStandardMaterial({ color: 0x00aa33, roughness: 0.85 });
+        const matPants = new THREE.MeshStandardMaterial({ color: 0x111418, roughness: 0.9 });
+        const matShoe = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
+        const matHair = new THREE.MeshStandardMaterial({ color: 0x2b1d12, roughness: 0.9 });
 
-        const audienceColors = [0xff0000, 0x0055ff, 0x00aa00, 0xffcc00, 0xaa00ff, 0x00ccff, 0xff5500, 0xffee00, 0xffffff, 0x111111];
-        const audienceMats = audienceColors.map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }));
+        const audienceColors = [0xff3322, 0x2266ff, 0x22aa33, 0xffcc00, 0xaa33dd, 0x22ccff, 0xff7722, 0xffee33, 0xf5f5f5, 0x222222];
+        const audienceMats = audienceColors.map(c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }));
 
         // --- Infinite Ground & Road ---
-        const groundGeo = new THREE.PlaneGeometry(500, 500);
-        const ground = new THREE.Mesh(groundGeo, matSidewalk);
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        scene.add(ground);
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), matSidewalk);
+        ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 
-        // Reduced road width from 24 to 12
-        const roadGeo = new THREE.PlaneGeometry(12, 500);
-        const road = new THREE.Mesh(roadGeo, matRoad);
-        road.rotation.x = -Math.PI / 2;
-        road.position.y = 0.05;
-        road.receiveShadow = true;
-        scene.add(road);
+        const road = new THREE.Mesh(new THREE.PlaneGeometry(12, 600), matRoad);
+        road.rotation.x = -Math.PI / 2; road.position.y = 0.05; road.receiveShadow = true; scene.add(road);
 
         const rails = [];
-        // Adjusted track offsets to fit the narrower road
         const trackOffsets = [-2, -0.6, 0.6, 2];
         trackOffsets.forEach(offset => {
-            const railGeo = new THREE.PlaneGeometry(0.2, 500);
-            const rail = new THREE.Mesh(railGeo, matRail);
-            rail.rotation.x = -Math.PI / 2;
-            rail.position.set(offset, 0.06, 0);
-            rail.receiveShadow = true;
-            scene.add(rail);
-            rails.push(rail);
+            const rail = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 600), matRail);
+            rail.rotation.x = -Math.PI / 2; rail.position.set(offset, 0.06, 0);
+            rail.receiveShadow = true; scene.add(rail); rails.push(rail);
         });
 
         // --- Finish Line Elements ---
-        let finishLineZ = 40; // Dynamic Z position
+        let finishLineZ = 40;
+        const finishLineGround = new THREE.Mesh(new THREE.PlaneGeometry(12, 12),
+            new THREE.MeshStandardMaterial({ map: texFinishLine, roughness: 0.6 }));
+        finishLineGround.rotation.x = -Math.PI / 2; finishLineGround.position.set(0, 0.07, finishLineZ);
+        finishLineGround.receiveShadow = true; scene.add(finishLineGround);
 
-        // Reduced finish line ground width to 12
-        const flGeo = new THREE.PlaneGeometry(12, 12);
-        const flMat = new THREE.MeshStandardMaterial({ map: texFinishLine, roughness: 0.6 });
-        const finishLineGround = new THREE.Mesh(flGeo, flMat);
-        finishLineGround.rotation.x = -Math.PI / 2;
-        finishLineGround.position.set(0, 0.07, finishLineZ);
-        finishLineGround.receiveShadow = true;
-        scene.add(finishLineGround);
-
-        // Reduced tape width to 12
-        const tapeGeo = new THREE.PlaneGeometry(12, 1.2);
-        const tapeMat = new THREE.MeshStandardMaterial({ map: texTape, side: THREE.DoubleSide, transparent: true, roughness: 0.8 });
-        const finishTape = new THREE.Mesh(tapeGeo, tapeMat);
-        finishTape.position.set(0, 1.8, finishLineZ);
-        finishTape.castShadow = true;
-        scene.add(finishTape);
+        const finishTape = new THREE.Mesh(new THREE.PlaneGeometry(12, 1.2),
+            new THREE.MeshStandardMaterial({ map: texTape, side: THREE.DoubleSide, transparent: true, roughness: 0.8 }));
+        finishTape.position.set(0, 1.8, finishLineZ); finishTape.castShadow = true; scene.add(finishTape);
 
         const clockGroup = new THREE.Group();
-        const clockStand = new THREE.Mesh(new THREE.BoxGeometry(1, 4, 1), new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.5, metalness: 0.8}));
+        const clockStand = new THREE.Mesh(new THREE.BoxGeometry(1, 4, 1), new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5, metalness: 0.8 }));
         clockStand.position.y = 2; clockStand.castShadow = true; clockStand.receiveShadow = true; clockGroup.add(clockStand);
-        const clockBox = new THREE.Mesh(new THREE.BoxGeometry(5, 2, 1.5), new THREE.MeshStandardMaterial({color: 0x0a1945, roughness: 0.4}));
+        const clockBox = new THREE.Mesh(new THREE.BoxGeometry(5, 2, 1.5), new THREE.MeshStandardMaterial({ color: 0x0a1945, roughness: 0.4 }));
         clockBox.position.y = 4.5; clockBox.castShadow = true; clockBox.receiveShadow = true; clockGroup.add(clockBox);
-        const screen = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 1.5), new THREE.MeshStandardMaterial({color: 0x000000, roughness: 0.2}));
+        const screen = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 1.5), new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.2 }));
         screen.position.set(0, 4.5, 0.76); clockGroup.add(screen);
-        // Moved clock closer to the narrower road edge
-        clockGroup.position.set(7, 0, finishLineZ);
-        clockGroup.rotation.y = -0.2;
-        scene.add(clockGroup);
+        clockGroup.position.set(7, 0, finishLineZ); clockGroup.rotation.y = -0.2; scene.add(clockGroup);
 
         // --- Endless Scenery Generation ---
         const scenery = [];
@@ -361,109 +353,114 @@
 
         function createTree(x, z) {
             const tree = new THREE.Group();
-            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 3, 5), matTrunk);
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.45, 3, 6), matTrunk);
             trunk.position.y = 1.5; trunk.castShadow = true; trunk.receiveShadow = true; tree.add(trunk);
             const leaves = new THREE.Mesh(new THREE.DodecahedronGeometry(2.5, 1), matLeaves);
             leaves.position.y = 4.5; leaves.castShadow = true; leaves.receiveShadow = true; tree.add(leaves);
-            tree.position.set(x, 0, z);
-            scene.add(tree);
-            return tree;
+            const leaves2 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.7, 1), matLeaves2);
+            leaves2.position.set(1.2, 5.6, 0.5); leaves2.castShadow = true; leaves2.receiveShadow = true; tree.add(leaves2);
+            const leaves3 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.5, 1), matLeaves2);
+            leaves3.position.set(-1.1, 5.2, -0.6); leaves3.castShadow = true; leaves3.receiveShadow = true; tree.add(leaves3);
+            tree.position.set(x, 0, z); tree.rotation.y = Math.random() * Math.PI; scene.add(tree); return tree;
         }
-
         function createPole(x, z) {
-            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 12, 8), matPole);
-            pole.position.set(x, 6, z);
-            pole.castShadow = true; pole.receiveShadow = true;
-            scene.add(pole);
-            return pole;
+            const grp = new THREE.Group();
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.2, 12, 8), matPole);
+            pole.position.y = 6; pole.castShadow = true; pole.receiveShadow = true; grp.add(pole);
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.18, 0.18), matPole);
+            arm.position.set(x > 0 ? -1 : 1, 11.5, 0); arm.castShadow = true; grp.add(arm);
+            const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.35, 10, 10),
+                new THREE.MeshStandardMaterial({ color: 0xfff6d8, emissive: 0xffeeaa, emissiveIntensity: 0.4, roughness: 0.4 }));
+            lamp.position.set(x > 0 ? -2 : 2, 11.4, 0); grp.add(lamp);
+            grp.position.set(x, 0, z); scene.add(grp); return grp;
         }
-
         function createClassicalBuilding(x, z, width, height, depth, isCurved) {
             const bldgGroup = new THREE.Group();
-            const bldgTexture = texStone.clone();
-            bldgTexture.needsUpdate = true;
+            const bldgTexture = texStone.clone(); bldgTexture.needsUpdate = true;
             bldgTexture.repeat.set(width / 15, height / 25);
             const matFacade = new THREE.MeshStandardMaterial({ map: bldgTexture, roughness: 0.8 });
             const matRoof = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9 });
-
-            let mesh;
-            const radius = width / 2; 
-            
+            let mesh; const radius = width / 2;
             if (isCurved) {
                 mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 16, 1, false, 0, Math.PI), [matFacade, matFacade, matRoof]);
-                mesh.rotation.y = x > 0 ? -Math.PI/2 : Math.PI/2;
+                mesh.rotation.y = x > 0 ? -Math.PI / 2 : Math.PI / 2;
             } else {
                 mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), [matFacade, matFacade, matRoof, matRoof, matFacade, matFacade]);
             }
-            mesh.position.y = height / 2; 
-            mesh.castShadow = true; mesh.receiveShadow = true;
-            bldgGroup.add(mesh);
-
+            mesh.position.y = height / 2; mesh.castShadow = true; mesh.receiveShadow = true; bldgGroup.add(mesh);
             const corniceGeo = isCurved ? new THREE.CylinderGeometry(radius + 1, radius + 0.5, 1.5, 16, 1, false, 0, Math.PI) : new THREE.BoxGeometry(width + 2, 1.5, depth + 2);
             const cornice = new THREE.Mesh(corniceGeo, matCornice);
-            cornice.position.y = height; if (isCurved) cornice.rotation.y = x > 0 ? -Math.PI/2 : Math.PI/2;
-            cornice.castShadow = true; cornice.receiveShadow = true;
-            bldgGroup.add(cornice);
-
+            cornice.position.y = height; if (isCurved) cornice.rotation.y = x > 0 ? -Math.PI / 2 : Math.PI / 2;
+            cornice.castShadow = true; cornice.receiveShadow = true; bldgGroup.add(cornice);
             const trimGeo = isCurved ? new THREE.CylinderGeometry(radius + 0.8, radius + 1, 0.8, 16, 1, false, 0, Math.PI) : new THREE.BoxGeometry(width + 1.6, 0.8, depth + 1.6);
             const trim = new THREE.Mesh(trimGeo, matRoofTrim);
-            trim.position.y = height + 1; if (isCurved) trim.rotation.y = x > 0 ? -Math.PI/2 : Math.PI/2;
-            trim.castShadow = true; trim.receiveShadow = true;
-            bldgGroup.add(trim);
-
-            bldgGroup.position.set(x, 0, z);
-            scene.add(bldgGroup);
-            return bldgGroup;
+            trim.position.y = height + 1; if (isCurved) trim.rotation.y = x > 0 ? -Math.PI / 2 : Math.PI / 2;
+            trim.castShadow = true; trim.receiveShadow = true; bldgGroup.add(trim);
+            bldgGroup.position.set(x, 0, z); scene.add(bldgGroup); return bldgGroup;
         }
+
+        // --- Spectator actions ---
+        const SPECTATOR_ACTIONS = ['jump', 'jump', 'jump', 'wave', 'clap', 'pump', 'sway'];
 
         function createSpectator(x, z, isLeftSide) {
             const specGroup = new THREE.Group();
             const matSpecShirt = audienceMats[Math.floor(Math.random() * audienceMats.length)];
-            
+
+            const bob = new THREE.Group(); specGroup.add(bob);
+
             const legs = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.3), matPants);
-            legs.position.y = 0.25; 
-            legs.castShadow = true; legs.receiveShadow = true; 
-            specGroup.add(legs);
-
+            legs.position.y = 0.25; legs.castShadow = true; legs.receiveShadow = true; bob.add(legs);
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.9, 0.3), matSpecShirt);
-            body.position.y = 0.95; body.castShadow = true; body.receiveShadow = true; specGroup.add(body);
-
+            body.position.y = 0.95; body.castShadow = true; body.receiveShadow = true; bob.add(body);
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), matSkin);
-            head.position.y = 1.6; head.castShadow = true; head.receiveShadow = true; specGroup.add(head);
+            head.position.y = 1.6; head.castShadow = true; head.receiveShadow = true; bob.add(head);
 
             function createArm(armX) {
-                const pivot = new THREE.Group(); pivot.position.set(armX, 1.3, 0); 
-                const arm = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.5, 0.15), matSkin);
-                arm.position.y = -0.25; arm.castShadow = true; arm.receiveShadow = true; pivot.add(arm);
+                const pivot = new THREE.Group(); pivot.position.set(armX, 1.35, 0);
+                const arm = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.55, 0.15), matSpecShirt);
+                arm.position.y = -0.275; arm.castShadow = true; arm.receiveShadow = true; pivot.add(arm);
+                const hand = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.17, 0.17), matSkin);
+                hand.position.y = -0.6; hand.castShadow = true; pivot.add(hand);
                 return pivot;
             }
+            const armL = createArm(-0.32), armR = createArm(0.32);
+            bob.add(armL); bob.add(armR);
 
-            const armL = createArm(-0.35), armR = createArm(0.35);
-            specGroup.add(armL); specGroup.add(armR);
             specGroup.rotation.y = isLeftSide ? Math.PI / 2 : -Math.PI / 2;
             specGroup.rotation.y += (Math.random() - 0.5) * 0.5;
             specGroup.position.set(x, 0, z);
             scene.add(specGroup);
 
-            const specData = { group: specGroup, armL: armL, armR: armR, phase: Math.random() * Math.PI * 2, speed: 10 + Math.random() * 8 };
-            spectators.push(specData);
+            const sh = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1),
+                new THREE.MeshBasicMaterial({ map: texBlob, transparent: true, opacity: 0.35, depthWrite: false }));
+            sh.rotation.x = -Math.PI / 2; sh.position.y = 0.08; specGroup.add(sh);
+
+            const action = SPECTATOR_ACTIONS[Math.floor(Math.random() * SPECTATOR_ACTIONS.length)];
+            const g = 22 + Math.random() * 14;
+            const airTime = 0.30 + Math.random() * 0.18;
+            const v0 = 0.5 * g * airTime;
+            const groundPause = 0.06 + Math.random() * 0.30;
+
+            spectators.push({
+                group: specGroup, bob, armL, armR, shadow: sh,
+                action,
+                g, airTime, v0, groundPause,
+                rate: 0.85 + Math.random() * 0.5,
+                wave: 4 + Math.random() * 4,
+                phase: Math.random() * 10
+            });
             return specGroup;
         }
 
-        for(let z = 0; z < wrapLength; z += 35) {
-            // Kept buildings far back to maintain the wide sidewalk feel
+        for (let z = 0; z < wrapLength; z += 35) {
             scenery.push({ mesh: createClassicalBuilding(-30, z, 20, 50 + Math.random() * 20, 25, false), baseZ: z });
             scenery.push({ mesh: createClassicalBuilding(30, z, 20, 60 + Math.random() * 20, 25, (z % 70 === 0)), baseZ: z });
-            
-            // Moved trees and poles closer to the new narrower road edge
             scenery.push({ mesh: createTree(-15, z + 5), baseZ: z + 5 });
             scenery.push({ mesh: createTree(15, z - 5), baseZ: z - 5 });
             scenery.push({ mesh: createPole(-10, z), baseZ: z });
             scenery.push({ mesh: createPole(10, z + 10), baseZ: z + 10 });
         }
-
         for (let z = 0; z < wrapLength; z += 1.5 + Math.random() * 2) {
-            // Moved spectators closer to the new narrower road edge (±7 to ±9 range)
             if (Math.random() > 0.2) scenery.push({ mesh: createSpectator(-7 - Math.random() * 2.0, z, true), baseZ: z });
             if (Math.random() > 0.4) scenery.push({ mesh: createSpectator(-9 - Math.random() * 2.0, z + Math.random(), true), baseZ: z });
             if (Math.random() > 0.2) scenery.push({ mesh: createSpectator(7 + Math.random() * 2.0, z, false), baseZ: z });
@@ -471,48 +468,136 @@
         }
 
         // --- Runner ---
+        // Hip pivot is at local y = 1.0. RUNNER_GROUND_Y is the standing hip offset;
+        // while sprinting, the hip height is driven by an explicit bounce (see below).
+        const RUNNER_GROUND_Y = 0.45;
+
         const runner = new THREE.Group();
         const runnerBody = new THREE.Group(); runner.add(runnerBody);
-        
+
         const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.4), matShirt);
         torso.position.y = 1.6; torso.castShadow = true; torso.receiveShadow = true; runnerBody.add(torso);
 
         const headGroup = new THREE.Group(); headGroup.position.y = 2.5; runnerBody.add(headGroup);
         const headRunner = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), matSkin);
-        headRunner.castShadow = true; headRunner.receiveShadow = true;
-        headGroup.add(headRunner);
+        headRunner.castShadow = true; headRunner.receiveShadow = true; headGroup.add(headRunner);
+        const hair = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.18, 0.54), matHair);
+        hair.position.set(0, 0.28, -0.02); hair.castShadow = true; headGroup.add(hair);
 
-        function createJointedLimb(width, upperLength, lowerLength, matUpper, matLower, x, y, z) {
+        function createJointedLimb(width, upperLength, lowerLength, matUpper, matLower, x, y, z, isLeg) {
             const root = new THREE.Group(); root.position.set(x, y, z);
             const upperMesh = new THREE.Mesh(new THREE.BoxGeometry(width, upperLength, width), matUpper);
             upperMesh.position.y = -upperLength / 2; upperMesh.castShadow = true; upperMesh.receiveShadow = true; root.add(upperMesh);
-            const lowerGroup = new THREE.Group(); lowerGroup.position.set(0, -upperLength, 0); 
+            const lowerGroup = new THREE.Group(); lowerGroup.position.set(0, -upperLength, 0);
             const lowerMesh = new THREE.Mesh(new THREE.BoxGeometry(width, lowerLength, width), matLower);
             lowerMesh.position.y = -lowerLength / 2; lowerMesh.castShadow = true; lowerMesh.receiveShadow = true; lowerGroup.add(lowerMesh);
+            if (isLeg) {
+                const shoe = new THREE.Mesh(new THREE.BoxGeometry(width + 0.05, 0.18, lowerLength * 0.85), matShoe);
+                shoe.position.set(0, -lowerLength, lowerLength * 0.18); shoe.castShadow = true; lowerGroup.add(shoe);
+            }
             root.add(lowerGroup);
-            return { root: root, lower: lowerGroup };
+            return { root, lower: lowerGroup };
         }
 
-        const armL = createJointedLimb(0.25, 0.6, 0.6, matSkin, matSkin, -0.55, 2.1, 0);
-        const armR = createJointedLimb(0.25, 0.6, 0.6, matSkin, matSkin, 0.55, 2.1, 0);
+        const armL = createJointedLimb(0.25, 0.6, 0.6, matSkin, matSkin, -0.55, 2.1, 0, false);
+        const armR = createJointedLimb(0.25, 0.6, 0.6, matSkin, matSkin, 0.55, 2.1, 0, false);
         runnerBody.add(armL.root); runnerBody.add(armR.root);
 
-        const legL = createJointedLimb(0.3, 0.7, 0.7, matPants, matSkin, -0.25, 1.0, 0);
-        const legR = createJointedLimb(0.3, 0.7, 0.7, matPants, matSkin, 0.25, 1.0, 0);
+        const legL = createJointedLimb(0.3, 0.7, 0.7, matPants, matSkin, -0.25, 1.0, 0, true);
+        const legR = createJointedLimb(0.3, 0.7, 0.7, matPants, matSkin, 0.25, 1.0, 0, true);
         runner.add(legL.root); runner.add(legR.root);
 
-        runner.rotation.y = 0; runner.rotation.x = 0.12; headGroup.rotation.x = -0.12; 
-        runner.position.set(0, 0, 0); 
+        runner.rotation.x = 0; headGroup.rotation.x = -0.1;
+        runner.position.set(0, RUNNER_GROUND_Y, 0);
         scene.add(runner);
+
+        // --- Runner contact shadow ---
+        const runnerShadow = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.6),
+            new THREE.MeshBasicMaterial({ map: texBlob, transparent: true, opacity: 0.45, depthWrite: false }));
+        runnerShadow.rotation.x = -Math.PI / 2;
+        runnerShadow.position.y = 0.09;
+        scene.add(runnerShadow);
+
+        // ===================================================================
+        //  SPRINT GAIT  (foot-locked IK -> no slip, no pops)
+        // -------------------------------------------------------------------
+        //  Sprint-specific form features (vs the earlier jog):
+        //   * Very low duty factor (0.28) -> SHORT ground contact, long FLIGHT.
+        //   * HIGH KNEE DRIVE: in swing the foot whips up & FORWARD so the IK
+        //     puts the thigh near horizontal (~90deg at peak knee lift) with the
+        //     shin hanging -> the unmistakable sprint "knee up" look.
+        //   * Early heel recovery: the foot stays back as it rises (heel tucks
+        //     toward the glutes) BEFORE the thigh punches forward.
+        //   * Foot lands close under the hips and paws back (small front reach)
+        //     -> avoids the over-stride / braking look.
+        //   * Big vertical float; aggressive, full-range arm pump (~90deg elbow).
+        // -------------------------------------------------------------------
+        //  No-slip rule (stance): the planted foot sweeps backward in the body
+        //  frame at exactly the body's forward speed. With z = ZC + A*(1-2s),
+        //  the foot travels 2*A over stance, and GAIT_D = 2*A / GAIT_STANCE is
+        //  the ground distance per leg cycle (so gaitPhase advances by dist/D).
+        // ===================================================================
+        const GAIT_A = 0.45;        // half ground sweep (longer sprint stride)
+        const GAIT_ZC = -0.12;      // stance center offset -> contact under/behind hips
+        const GAIT_STANCE = 0.28;   // DUTY FACTOR (<0.3) -> short contact, big flight
+        const GAIT_LIFT = 1.05;     // swing lift: high -> high knee drive
+        const GAIT_SOLE_Y = 0.1;    // planted ankle target height (world units)
+        const GAIT_D = 2 * GAIT_A / GAIT_STANCE; // body distance per full leg cycle
+        const LEG_MAX = 1.4;        // thigh + shin
+
+        function smootherstep(a, b, x) {
+            x = Math.max(0, Math.min(1, (x - a) / (b - a)));
+            return x * x * x * (x * (x * 6 - 15) + 10);
+        }
+
+        // Foot target (in the body frame) given a leg's phase p in [0,1).
+        function footTarget(p) {
+            if (p < GAIT_STANCE) {
+                // STANCE: ankle glued to ground, sweeping front -> back, pawing.
+                const s = p / GAIT_STANCE;
+                return { z: GAIT_ZC + GAIT_A * (1 - 2 * s), y: GAIT_SOLE_Y };
+            }
+            // SWING: foot stays back early while rising (heel tucks), then the
+            // knee drives up & forward to a high front position, then descends.
+            const s = (p - GAIT_STANCE) / (1 - GAIT_STANCE);
+            const z = (GAIT_ZC - GAIT_A) + 2 * GAIT_A * smootherstep(0.10, 0.92, s);
+            // lift peaks in the FRONT half of swing (knee drive), high amplitude
+            const lift = GAIT_LIFT * Math.pow(Math.sin(Math.PI * Math.pow(s, 1.25)), 1.15);
+            return { z: z, y: GAIT_SOLE_Y + lift };
+        }
+
+        // 2-bone IK in the sagittal plane. Drives thigh + knee so the ankle lands
+        // at (footZ forward of hip, footWorldY). Uses runner.position.y for hip
+        // height, so it MUST run after runner.position.y is set this frame.
+        function solveLegIK(rootObj, lowerObj, footZ, footWorldY) {
+            const L1 = 0.7, L2 = 0.7;
+            const rootWorldY = runner.position.y + 1.0;   // hip pivot world height
+            const u = rootWorldY - footWorldY;            // downward distance (+)
+            const w = -footZ;                             // backward distance (+)
+            let dist = Math.sqrt(u * u + w * w);
+            dist = Math.max(Math.min(dist, (L1 + L2) * 0.999), Math.abs(L1 - L2) + 0.001);
+            const gamma = Math.atan2(w, u);
+            const cosA = (L1 * L1 + dist * dist - L2 * L2) / (2 * L1 * dist);
+            const a = Math.acos(Math.min(1, Math.max(-1, cosA)));
+            const theta = gamma - a;                      // thigh angle (matches rotation.x)
+            const ku = L1 * Math.cos(theta), kw = L1 * Math.sin(theta);
+            const beta = Math.atan2(w - kw, u - ku);      // absolute shin angle
+            rootObj.rotation.x = theta;
+            lowerObj.rotation.x = beta - theta;           // knee flex (>=0)
+        }
 
         // --- Timer & Logic State ---
         let isRunning = false;
         let isFinished = false;
         let timeRemaining = 0;
         let animCycle = 0;
-        
-        const CONSTANT_RUN_SPEED = 4.0; 
-        
+        let gaitPhase = 0;      // advances with DISTANCE (so feet never slide)
+        let runWeight = 0;
+        let finishTime = 0;
+
+        // Fast ground speed -> scenery flies by and turnover reads as a sprint.
+        const CONSTANT_RUN_SPEED = 6.6;
+
         const startBtn = document.getElementById('start-btn');
         const timerDisplay = document.getElementById('timer-display');
 
@@ -522,28 +607,21 @@
             const s = Math.floor(seconds % 60);
             return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
         }
+        function lerp(a, b, t) { return a + (b - a) * t; }
 
         startBtn.addEventListener('click', () => {
-            initAudio(); 
-            
+            initAudio();
             const h = parseInt(document.getElementById('hours').value) || 0;
             const m = parseInt(document.getElementById('minutes').value) || 0;
             const s = parseInt(document.getElementById('seconds').value) || 0;
-            
             timeRemaining = h * 3600 + m * 60 + s;
-            
             if (timeRemaining > 0) {
                 const requiredDistance = CONSTANT_RUN_SPEED * timeRemaining;
                 finishLineZ = runner.position.z + requiredDistance;
-                
                 finishLineGround.position.z = finishLineZ;
                 finishTape.position.z = finishLineZ;
                 clockGroup.position.z = finishLineZ;
-                
-                isRunning = true;
-                isFinished = false;
-                finishTape.visible = true;
-                
+                isRunning = true; isFinished = false; finishTape.visible = true;
                 startBtn.disabled = true;
                 document.getElementById('hours').disabled = true;
                 document.getElementById('minutes').disabled = true;
@@ -553,88 +631,218 @@
 
         // --- Animation Loop ---
         const clock = new THREE.Clock();
-        const roadAngleOffset = 0.15; 
+        const roadAngleOffset = 0.15;
         const cameraDistance = 12;
+        const camTarget = new THREE.Vector3();
 
         function mod(n, m) { return ((n % m) + m) % m; }
 
+        function ballisticHop(t, v0, g, airTime, pause) {
+            const cycleT = airTime + pause;
+            const lt = mod(t, cycleT);
+            if (lt < airTime) {
+                return Math.max(0, v0 * lt - 0.5 * g * lt * lt);
+            }
+            return 0;
+        }
+
         function animate() {
             requestAnimationFrame(animate);
-
-            const delta = clock.getDelta();
+            const delta = Math.min(clock.getDelta(), 0.05);
             const time = clock.getElapsedTime();
 
             if (isRunning) {
                 timeRemaining -= delta;
-                
                 if (timeRemaining <= 0) {
-                    timeRemaining = 0;
-                    isRunning = false;
-                    isFinished = true;
-                    runner.position.z = finishLineZ; 
-                    finishTape.visible = false;      
-                    
-                    playVictorySound();              
-                    
+                    timeRemaining = 0; isRunning = false; isFinished = true; finishTime = time;
+                    runner.position.z = finishLineZ; finishTape.visible = false;
+                    playVictorySound();
                     startBtn.disabled = false;
                     document.getElementById('hours').disabled = false;
                     document.getElementById('minutes').disabled = false;
                     document.getElementById('seconds').disabled = false;
                 } else {
                     runner.position.z += CONSTANT_RUN_SPEED * delta;
-                    animCycle += delta * 15; 
+                    // gait advances with DISTANCE, locking foot-speed to ground-speed
+                    gaitPhase += (CONSTANT_RUN_SPEED * delta) / GAIT_D;
                 }
-                
                 timerDisplay.innerText = formatTime(timeRemaining);
             }
 
-            // --- Runner Animation States ---
+            const targetWeight = isRunning ? 1 : 0;
+            runWeight += (targetWeight - runWeight) * Math.min(1, delta * 6);
+
+            // --- Runner Animation ---
+            let bodyYExtra = 0;
             if (isFinished) {
-                armL.root.rotation.x = 3.14; armL.root.rotation.z = -0.4; armL.lower.rotation.x = 0;   
-                armR.root.rotation.x = 3.14; armR.root.rotation.z = 0.4;  armR.lower.rotation.x = 0;
-                runnerBody.rotation.x = -0.2; runnerBody.rotation.y = 0; headGroup.rotation.x = -0.3; 
-                legL.root.rotation.x = 0; legR.root.rotation.x = 0; legL.lower.rotation.x = 0; legR.lower.rotation.x = 0;
-                runner.position.y = 0;
-            } else if (isRunning) {
-                armL.root.rotation.z = 0; armR.root.rotation.z = 0; runnerBody.rotation.x = 0; headGroup.rotation.x = -0.12;
-                legL.root.rotation.x = Math.sin(animCycle) * 1.0 - 0.3; legR.root.rotation.x = Math.sin(animCycle + Math.PI) * 1.0 - 0.3;
-                legL.lower.rotation.x = Math.max(0, -Math.cos(animCycle - 0.5)) * 2.2; legR.lower.rotation.x = Math.max(0, -Math.cos(animCycle + Math.PI - 0.5)) * 2.2;
-                runner.position.y = Math.abs(Math.sin(animCycle)) * 0.25;
-                armL.root.rotation.x = Math.sin(animCycle + Math.PI) * 0.9; armR.root.rotation.x = Math.sin(animCycle) * 0.9;
-                armL.lower.rotation.x = -1.5 + Math.cos(animCycle + Math.PI) * 0.15; armR.lower.rotation.x = -1.5 + Math.cos(animCycle) * 0.15;
-                runnerBody.rotation.y = Math.sin(animCycle) * 0.1;
+                const vt = (time - finishTime);
+                const hop = ballisticHop(vt, 0.5 * 26 * 0.42, 26, 0.42, 0.12);
+                bodyYExtra = hop;
+                runnerBody.rotation.x = -0.1;
+                runnerBody.rotation.y = Math.sin(vt * 6) * 0.12;
+                headGroup.rotation.x = -0.25;
+                armL.root.rotation.x = -2.7 + Math.sin(vt * 10) * 0.25;
+                armR.root.rotation.x = -2.7 + Math.cos(vt * 10) * 0.25;
+                armL.root.rotation.z = -0.35; armR.root.rotation.z = 0.35;
+                armL.lower.rotation.x = -0.3; armR.lower.rotation.x = -0.3;
+                const legSpread = hop * 0.6;
+                legL.root.rotation.x = -legSpread; legR.root.rotation.x = legSpread;
+                legL.lower.rotation.x = legSpread * 1.5; legR.lower.rotation.x = -legSpread * 0.5 + 0.2;
+                runner.position.y = RUNNER_GROUND_Y + bodyYExtra;
             } else {
-                armL.root.rotation.set(0, 0, 0); armR.root.rotation.set(0, 0, 0); armL.lower.rotation.x = -0.2; armR.lower.rotation.x = -0.2;
-                legL.root.rotation.x = 0; legR.root.rotation.x = 0; legL.lower.rotation.x = 0; legR.lower.rotation.x = 0;
-                runnerBody.rotation.set(0, 0, 0); headGroup.rotation.x = 0; runner.position.y = 0;
+                const wgt = runWeight;
+
+                // legs are half a cycle apart -> alternating single-leg drives
+                const pL = mod(gaitPhase, 1);
+                const pR = mod(gaitPhase + 0.5, 1);
+                const fL = footTarget(pL);
+                const fR = footTarget(pR);
+
+                // --- Sprint bounce: low at mid-stance (absorb), high at float ---
+                // Two dips per cycle (one per step). Bigger amplitude than a jog
+                // for a pronounced flight phase.
+                const vbob = 0.5 - 0.5 * Math.cos(4 * Math.PI * (gaitPhase - GAIT_STANCE / 2));
+                const hipLow = 1.27, hipHigh = 1.49;  // hip-pivot world height range
+                const runPosY = (hipLow + (hipHigh - hipLow) * vbob) - 1.0;
+                bodyYExtra = lerp(0, runPosY - RUNNER_GROUND_Y, wgt);
+                runner.position.y = RUNNER_GROUND_Y + bodyYExtra;   // set BEFORE IK
+
+                // Foot targets, blended toward a relaxed idle stance when stopped.
+                const tLz = lerp(0, fL.z, wgt), tLy = lerp(GAIT_SOLE_Y, fL.y, wgt);
+                const tRz = lerp(0, fR.z, wgt), tRy = lerp(GAIT_SOLE_Y, fR.y, wgt);
+                solveLegIK(legL.root, legL.lower, tLz, tLy);
+                solveLegIK(legR.root, legR.lower, tRz, tRy);
+
+                // Arms: aggressive, full-range pump, ~90deg elbow, opposed to legs.
+                const cc = gaitPhase * Math.PI * 2;
+                const breathe = Math.sin(time * 1.5) * 0.04;
+                const swing = 1.05;                 // big sprint amplitude
+                armL.root.rotation.x = lerp(0.05 + breathe,  Math.sin(cc) * swing, wgt);
+                armR.root.rotation.x = lerp(0.05 - breathe, -Math.sin(cc) * swing, wgt);
+                armL.root.rotation.z = lerp(0.08,  0.10, wgt);
+                armR.root.rotation.z = lerp(-0.08, -0.10, wgt);
+                // elbow stays tight (~90deg), clamping a touch harder on the
+                // forward drive so the hand snaps up toward the chin.
+                armL.lower.rotation.x = lerp(-0.2, -1.6 - Math.max(0, Math.sin(cc)) * 0.5, wgt);
+                armR.lower.rotation.x = lerp(-0.2, -1.6 - Math.max(0, -Math.sin(cc)) * 0.5, wgt);
+
+                // Posture: tall at top speed with only a slight forward lean from
+                // the ankles; eyes up the track; small torso counter-rotation.
+                runnerBody.rotation.x = lerp(breathe * 0.5, 0.11, wgt);
+                runnerBody.rotation.y = lerp(0, Math.sin(cc) * 0.06, wgt);
+                headGroup.rotation.x = lerp(0, -0.04, wgt);
             }
 
-            // Animate Audience
+            // Update runner contact shadow
+            runnerShadow.position.x = runner.position.x - 0.25;
+            runnerShadow.position.z = runner.position.z + 0.35;
+            runnerShadow.rotation.z = runner.rotation.y;
+            const lift = Math.max(0, runner.position.y - RUNNER_GROUND_Y);
+            runnerShadow.material.opacity = 0.45 / (1 + lift * 3);
+            const sScale = 1 + lift * 0.6;
+            runnerShadow.scale.set(sScale, sScale, 1);
+
+            // --- Crowd: varied cheering with gravity ---
             spectators.forEach(spec => {
-                const t = time * spec.speed + spec.phase;
-                spec.group.position.y = Math.max(0, Math.sin(t)) * 0.4;
-                spec.armL.rotation.z = -2.5 + Math.sin(t * 1.2) * 0.5;
-                spec.armR.rotation.z = 2.5 + Math.cos(t * 1.2) * 0.5;
-                spec.group.rotation.x = Math.sin(t * 0.8) * 0.1;
+                const t = time * spec.rate + spec.phase;
+                const wv = time * spec.wave + spec.phase;
+
+                spec.bob.scale.y = 1;
+                spec.bob.position.y = 0;
+                spec.bob.rotation.z = 0;
+
+                switch (spec.action) {
+                    case 'jump': {
+                        const cycleT = spec.airTime + spec.groundPause;
+                        const lt = mod(t, cycleT);
+                        let y = 0, crouch = 0;
+                        if (lt < spec.airTime) {
+                            y = Math.max(0, spec.v0 * lt - 0.5 * spec.g * lt * lt);
+                        } else {
+                            const gp = (lt - spec.airTime) / spec.groundPause;
+                            crouch = Math.sin(gp * Math.PI) * 0.14;
+                        }
+                        spec.bob.position.y = y;
+                        spec.bob.scale.y = 1 - crouch;
+                        const reach = -2.5 - y * 0.4;
+                        spec.armL.rotation.x = reach;
+                        spec.armR.rotation.x = reach;
+                        spec.armL.rotation.z = 0.3;
+                        spec.armR.rotation.z = -0.3;
+                        break;
+                    }
+                    case 'wave': {
+                        const s = Math.sin(wv);
+                        spec.armL.rotation.x = -2.7;
+                        spec.armR.rotation.x = -2.7;
+                        spec.armL.rotation.z = 0.25 + s * 0.45;
+                        spec.armR.rotation.z = -0.25 + s * 0.45;
+                        spec.bob.rotation.z = s * 0.06;
+                        break;
+                    }
+                    case 'clap': {
+                        const clap = Math.sin(wv) * 0.5 + 0.5;
+                        spec.armL.rotation.x = -1.35;
+                        spec.armR.rotation.x = -1.35;
+                        spec.armL.rotation.z = 0.05 + clap * 0.55;
+                        spec.armR.rotation.z = -0.05 - clap * 0.55;
+                        spec.bob.position.y = clap * 0.04;
+                        break;
+                    }
+                    case 'pump': {
+                        const pb = Math.abs(Math.sin(wv * 0.7));
+                        spec.bob.position.y = pb * 0.10;
+                        const pump = -2.8 + (1 - pb) * 1.5;
+                        spec.armR.rotation.x = pump;
+                        spec.armR.rotation.z = -0.1;
+                        spec.armL.rotation.x = -0.35;
+                        spec.armL.rotation.z = 0.18;
+                        break;
+                    }
+                    case 'sway': {
+                        const s = Math.sin(wv * 0.55);
+                        spec.bob.rotation.z = s * 0.12;
+                        spec.armL.rotation.x = -0.4 + s * 0.35;
+                        spec.armR.rotation.x = -0.4 - s * 0.35;
+                        spec.armL.rotation.z = 0.2;
+                        spec.armR.rotation.z = -0.2;
+                        break;
+                    }
+                }
+
+                if (spec.shadow) {
+                    const sl = spec.bob.position.y;
+                    spec.shadow.material.opacity = 0.35 / (1 + sl * 2.5);
+                    const sc = 1 + sl * 0.5;
+                    spec.shadow.scale.set(sc, sc, 1);
+                }
             });
 
-            // Camera positioning
+            // Camera
             camera.position.z = runner.position.z + cameraDistance;
-            camera.position.x = -cameraDistance * roadAngleOffset; 
-            camera.position.y = 3; 
-            camera.lookAt(100 * roadAngleOffset, 3, runner.position.z - 100);
+            camera.position.x = -cameraDistance * roadAngleOffset;
+            camera.position.y = 3.2 + Math.sin(time * 0.6) * 0.03;
+            camTarget.set(100 * roadAngleOffset, 2.6, runner.position.z - 100);
+            camera.lookAt(camTarget);
             runner.rotation.y = Math.atan(roadAngleOffset);
 
-            // --- 2 PM Sun Logic ---
-            dirLight.position.set(camera.position.x + 30, 80, camera.position.z - 20);
-            dirLight.target.position.set(camera.position.x, 0, camera.position.z - 10);
+            // Sky & clouds
+            skyDome.position.set(camera.position.x, 0, camera.position.z);
+            clouds.forEach(cl => {
+                const driftX = ((time * cl.drift) % 360) - 180;
+                cl.mesh.position.set(camera.position.x + cl.baseX + driftX * 0.3, cl.y, camera.position.z + cl.z);
+            });
 
-            // --- Endless Environment Logic ---
+            // Sun + shadow camera follow the runner
+            dirLight.position.set(runner.position.x + 35, 75, runner.position.z + 20);
+            dirLight.target.position.set(runner.position.x, 0, runner.position.z - 8);
+
+            // Endless environment
             ground.position.z = camera.position.z;
             road.position.z = camera.position.z;
             rails.forEach(rail => rail.position.z = camera.position.z);
 
-            const offset = 20; 
+            const offset = 20;
             scenery.forEach(item => {
                 item.mesh.position.z = camera.position.z + offset - mod(camera.position.z + offset - item.baseZ, wrapLength);
             });
